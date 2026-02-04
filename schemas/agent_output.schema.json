@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RoleAgentScore",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "role_id",
+    "scores",
+    "rationales",
+    "evidence"
+  ],
+  "properties": {
+    "role_id": {
+      "type": "string"
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factual_accuracy",
+        "relevant_chronic_problem_coverage",
+        "organized_by_condition",
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "focused_not_cluttered",
+        "usefulness_for_decision_making",
+        "clarity_readability_formatting"
+      ],
+      "properties": {
+        "factual_accuracy": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "organized_by_condition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "timeline_evolution": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "recent_changes_highlighted": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "focused_not_cluttered": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "usefulness_for_decision_making": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "clarity_readability_formatting": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    },
+    "rationales": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factual_accuracy",
+        "relevant_chronic_problem_coverage",
+        "organized_by_condition",
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "focused_not_cluttered",
+        "usefulness_for_decision_making",
+        "clarity_readability_formatting"
+      ],
+      "properties": {
+        "factual_accuracy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "organized_by_condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeline_evolution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recent_changes_highlighted": {
+          "type": "string",
+          "minLength": 1
+        },
+        "focused_not_cluttered": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usefulness_for_decision_making": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clarity_readability_formatting": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factual_accuracy",
+        "relevant_chronic_problem_coverage",
+        "organized_by_condition",
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "focused_not_cluttered",
+        "usefulness_for_decision_making",
+        "clarity_readability_formatting"
+      ],
+      "properties": {
+        "factual_accuracy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "organized_by_condition": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeline_evolution": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recent_changes_highlighted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "focused_not_cluttered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "usefulness_for_decision_making": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clarity_readability_formatting": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "overall_notes": {
+      "type": "string"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "overall_score": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factual_accuracy",
+        "relevant_chronic_problem_coverage",
+        "organized_by_condition",
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "focused_not_cluttered",
+        "usefulness_for_decision_making",
+        "clarity_readability_formatting"
+      ],
+      "properties": {
+        "factual_accuracy": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "organized_by_condition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "timeline_evolution": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "recent_changes_highlighted": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "focused_not_cluttered": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "usefulness_for_decision_making": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "clarity_readability_formatting": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    }
+  }
+}
