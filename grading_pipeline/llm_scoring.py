@@ -53,7 +53,7 @@ def score_summary_llm(
     role: RoleProfile,
     rubric: Rubric,
     *,
-    model: str = "gpt-4o",
+    model: str = "gpt-4o-mini",
     temperature: float = 0.2,
 ) -> AgentScore:
     schema = _build_score_schema(rubric)

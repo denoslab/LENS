@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 import urllib.error
 import urllib.request
 from typing import Any, Dict
@@ -9,12 +10,28 @@ class OpenAIClientError(RuntimeError):
     pass
 
 
-def _load_dotenv(path: str, *, override: bool = False) -> None:
+def _strip_inline_comment(value: str) -> str:
+    if "#" not in value:
+        return value
+    in_single = False
+    in_double = False
+    for idx, ch in enumerate(value):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            return value[:idx].rstrip()
+    return value
+
+
+def _read_dotenv(path: str) -> dict[str, str]:
     try:
         raw = Path(path).read_text()
     except FileNotFoundError:
-        return
+        return {}
 
+    result: dict[str, str] = {}
     for line in raw.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -25,12 +42,21 @@ def _load_dotenv(path: str, *, override: bool = False) -> None:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
+        value = _strip_inline_comment(value.strip())
         value = value.strip().strip('"').strip("'")
         if not key:
             continue
-        if key in os.environ and not override:
-            continue
-        os.environ[key] = value
+        result[key] = value
+    return result
+
+
+def _resolve_api_key() -> str | None:
+    dotenv = _read_dotenv(".env")
+    key = dotenv.get("OPENAI_API_KEY")
+    if key:
+        os.environ["OPENAI_API_KEY"] = key
+        return key
+    return os.getenv("OPENAI_API_KEY")
 
 
 def _request_headers(api_key: str) -> Dict[str, str]:
@@ -48,10 +74,7 @@ def create_response(
     json_schema: Dict[str, Any],
     temperature: float = 0.2,
 ) -> Dict[str, Any]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        _load_dotenv(".env")
-        api_key = os.getenv("OPENAI_API_KEY")
+    api_key = _resolve_api_key()
     if not api_key:
         raise OpenAIClientError("OPENAI_API_KEY is not set.")
 
@@ -65,11 +88,9 @@ def create_response(
         "text": {
             "format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "role_score",
-                    "strict": True,
-                    "schema": json_schema,
-                },
+                "name": "role_score",
+                "strict": True,
+                "schema": json_schema,
             }
         },
     }

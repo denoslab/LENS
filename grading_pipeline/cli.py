@@ -67,7 +67,7 @@ def main() -> int:
         help="Path to roles JSON.",
     )
     parser.add_argument("--engine", choices=["llm", "heuristic"], default="llm", help="Scoring engine to use.")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model for LLM scoring.")
+    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="OpenAI model for LLM scoring.")
     parser.add_argument("--temperature", type=float, default=0.2, help="LLM sampling temperature.")
     parser.add_argument("--format", choices=["human", "json"], default="human", help="Output format.")
     parser.add_argument("--pretty", action="store_true", help="Pretty JSON output (json format only).")
