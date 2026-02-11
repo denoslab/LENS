@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class RoleProfile:
     name: str
     persona: str
     w_prior: Dict[str, float]
+    prompt_profile: Dict[str, Any]
 
 
 def load_rubric(path: str | Path) -> Rubric:
@@ -44,8 +45,28 @@ def load_rubric(path: str | Path) -> Rubric:
     return Rubric(rubric_id=data["rubric_id"], dimensions=dims)
 
 
+def _load_prompt_profile(roles_path: Path, role_item: Dict[str, Any]) -> Dict[str, Any]:
+    profile_path = role_item.get("profile_path")
+    if not profile_path:
+        return {}
+
+    full_path = roles_path.parent / profile_path
+    try:
+        return json.loads(full_path.read_text())
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"Role {role_item.get('id', '<unknown>')} profile file not found: {full_path}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Role {role_item.get('id', '<unknown>')} profile file is invalid JSON: {full_path}"
+        ) from exc
+
+
 def load_roles(path: str | Path, dimension_ids: List[str]) -> List[RoleProfile]:
-    data = json.loads(Path(path).read_text())
+    roles_path = Path(path)
+    data = json.loads(roles_path.read_text())
+
     roles: List[RoleProfile] = []
     for item in data["roles"]:
         w_prior = item["w_prior"]
@@ -59,12 +80,15 @@ def load_roles(path: str | Path, dimension_ids: List[str]) -> List[RoleProfile]:
             raise ValueError(
                 f"Role {item['id']} has unknown dimensions: {sorted(extra)}"
             )
+
         roles.append(
             RoleProfile(
                 id=item["id"],
                 name=item["name"],
                 persona=item["persona"],
                 w_prior={k: float(v) for k, v in w_prior.items()},
+                prompt_profile=_load_prompt_profile(roles_path, item),
             )
         )
+
     return roles
