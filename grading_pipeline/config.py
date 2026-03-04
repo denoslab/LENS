@@ -1,4 +1,5 @@
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -63,6 +64,23 @@ def _load_prompt_profile(roles_path: Path, role_item: Dict[str, Any]) -> Dict[st
         ) from exc
 
 
+def _validate_weights(role_id: str, weights: Dict[str, float]) -> None:
+    for dim_id, value in weights.items():
+        if not math.isfinite(value):
+            raise ValueError(
+                f"Role {role_id} weight for '{dim_id}' is not a finite number: {value}"
+            )
+        if value < 0.0 or value > 1.0:
+            raise ValueError(
+                f"Role {role_id} weight for '{dim_id}' must be in [0, 1], got {value}"
+            )
+
+    if sum(weights.values()) <= 0.0:
+        raise ValueError(
+            f"Role {role_id} has all-zero weights. At least one dimension must be > 0."
+        )
+
+
 def load_roles(path: str | Path, dimension_ids: List[str]) -> List[RoleProfile]:
     roles_path = Path(path)
     data = json.loads(roles_path.read_text())
@@ -81,12 +99,15 @@ def load_roles(path: str | Path, dimension_ids: List[str]) -> List[RoleProfile]:
                 f"Role {item['id']} has unknown dimensions: {sorted(extra)}"
             )
 
+        normalized_weights = {k: float(v) for k, v in w_prior.items()}
+        _validate_weights(item["id"], normalized_weights)
+
         roles.append(
             RoleProfile(
                 id=item["id"],
                 name=item["name"],
                 persona=item["persona"],
-                w_prior={k: float(v) for k, v in w_prior.items()},
+                w_prior=normalized_weights,
                 prompt_profile=_load_prompt_profile(roles_path, item),
             )
         )

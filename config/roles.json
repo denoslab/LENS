@@ -6,14 +6,14 @@
       "persona": "Attending ED physician focused on clinical decision-making, risk stratification, and diagnostic reliability.",
       "profile_path": "role_profiles/physician.json",
       "w_prior": {
-        "factual_accuracy": 1.4,
-        "relevant_chronic_problem_coverage": 1.1,
-        "organized_by_condition": 0.8,
-        "timeline_evolution": 1.3,
-        "recent_changes_highlighted": 1.2,
-        "focused_not_cluttered": 0.9,
-        "usefulness_for_decision_making": 1.5,
-        "clarity_readability_formatting": 0.8
+        "factual_accuracy": 1.0,
+        "relevant_chronic_problem_coverage": 0.8,
+        "organized_by_condition": 0.5,
+        "timeline_evolution": 0.9,
+        "recent_changes_highlighted": 0.85,
+        "focused_not_cluttered": 0.6,
+        "usefulness_for_decision_making": 1.0,
+        "clarity_readability_formatting": 0.55
       }
     },
     {
@@ -22,14 +22,14 @@
       "persona": "ED triage nurse prioritizing immediate risk cues, acuity sorting, and speed of interpretation.",
       "profile_path": "role_profiles/triage_nurse.json",
       "w_prior": {
-        "factual_accuracy": 1.2,
-        "relevant_chronic_problem_coverage": 0.7,
-        "organized_by_condition": 0.7,
-        "timeline_evolution": 1.3,
-        "recent_changes_highlighted": 1.4,
-        "focused_not_cluttered": 1.4,
-        "usefulness_for_decision_making": 1.5,
-        "clarity_readability_formatting": 1.3
+        "factual_accuracy": 0.85,
+        "relevant_chronic_problem_coverage": 0.4,
+        "organized_by_condition": 0.4,
+        "timeline_evolution": 0.95,
+        "recent_changes_highlighted": 1.0,
+        "focused_not_cluttered": 0.95,
+        "usefulness_for_decision_making": 1.0,
+        "clarity_readability_formatting": 0.9
       }
     },
     {
@@ -38,14 +38,14 @@
       "persona": "Bedside nurse focused on actionable care continuity, medication safety, and near-term monitoring needs.",
       "profile_path": "role_profiles/bedside_nurse.json",
       "w_prior": {
-        "factual_accuracy": 1.2,
-        "relevant_chronic_problem_coverage": 0.9,
-        "organized_by_condition": 1.0,
-        "timeline_evolution": 1.1,
-        "recent_changes_highlighted": 1.5,
-        "focused_not_cluttered": 1.2,
-        "usefulness_for_decision_making": 1.4,
-        "clarity_readability_formatting": 1.3
+        "factual_accuracy": 0.85,
+        "relevant_chronic_problem_coverage": 0.55,
+        "organized_by_condition": 0.6,
+        "timeline_evolution": 0.7,
+        "recent_changes_highlighted": 1.0,
+        "focused_not_cluttered": 0.8,
+        "usefulness_for_decision_making": 0.95,
+        "clarity_readability_formatting": 0.9
       }
     }
   ]

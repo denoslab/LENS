@@ -1,54 +1,96 @@
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, Sequence
 
-from .config import load_roles, load_rubric
-from .scoring import AgentScore, score_summary_heuristic
-from .llm_scoring import score_summary_llm
+from .config import Rubric, load_roles, load_rubric
+from .orchestrator import run_pipeline
 
 
-DEFAULT_SUMMARY = (
-    "PMH: diabetes, hypertension, CKD. Recent: admitted last week for CHF "
-    "exacerbation, discharged 2 days ago. Today presents with SOB x 2 days, "
-    "worsened overnight. Meds: lisinopril, metformin, furosemide. Allergies: "
-    "NKDA. Vitals: BP 150/90, HR 105, SpO2 92% RA. Labs pending, CT chest ordered."
+MIN_SUMMARY_CHARS = 30
+EMPTY_SUMMARY_ERROR = "Error: summary is required and cannot be empty."
+SHORT_SUMMARY_ERROR = (
+    f"Error: summary must be at least {MIN_SUMMARY_CHARS} characters after trimming whitespace."
 )
 
 
-def _load_summary(args: argparse.Namespace) -> str:
-    if args.summary:
+def _resolve_summary(args: argparse.Namespace) -> str | None:
+    # Treat --summary "" as explicitly provided input; do not fall back.
+    if args.summary is not None:
         return args.summary
     if args.summary_file:
-        return Path(args.summary_file).read_text().strip()
-    return DEFAULT_SUMMARY
+        return Path(args.summary_file).read_text()
+    return None
 
 
-async def _run_agents(summary: str, roles, rubric, engine: str, model: str, temperature: float) -> List[AgentScore]:
-    if engine == "llm":
-        tasks = [asyncio.to_thread(score_summary_llm, summary, role, rubric, model=model, temperature=temperature) for role in roles]
-    else:
-        tasks = [asyncio.to_thread(score_summary_heuristic, summary, role, rubric) for role in roles]
-    return await asyncio.gather(*tasks)
+def _validate_summary(summary: str | None) -> str:
+    if summary is None:
+        raise ValueError(EMPTY_SUMMARY_ERROR)
+
+    cleaned = summary.strip()
+    if not cleaned:
+        raise ValueError(EMPTY_SUMMARY_ERROR)
+
+    if len(cleaned) < MIN_SUMMARY_CHARS:
+        raise ValueError(SHORT_SUMMARY_ERROR)
+
+    return cleaned
 
 
-def _print_human(agents: List[AgentScore], roles, rubric) -> None:
-    role_map = {role.id: role.name for role in roles}
-    for agent in agents:
-        title = role_map.get(agent.role_id, agent.role_id)
-        print(f"{title}:")
+def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
+    separator = "----------------------------------------"
+
+    # Keep one empty line before the formatted report block.
+    print("")
+    print(separator)
+    print("Role-Aware Multi-Agent Grading Pipeline:")
+    print(separator)
+
+    for scorecard in result["per_role_scorecards"]:
+        print(f"{scorecard['role']}:")
+        scores = scorecard.get("scores", {})
         for dim in rubric.dimensions:
-            score = agent.scores.get(dim.id, "NA")
-            print(f"{dim.name}: {score}")
-        if agent.overall_score is not None:
-            print(f"Overall: {agent.overall_score}")
+            score = scores.get(dim.id)
+            if isinstance(score, (int, float)):
+                print(f"{dim.name}: {float(score):.1f}")
+            else:
+                print(f"{dim.name}: NA")
+
         print("")
+        overall = scorecard.get("overall")
+        if isinstance(overall, (int, float)):
+            print(f"Overall: {float(overall):.2f}")
+        else:
+            print("Overall: NA")
+        print(separator)
+
+    # Keep an extra separator before disagreement to match the requested layout.
+    print(separator)
+    print("Orchestrator Disagreement:")
+    print(separator)
+
+    disagreement_map = result.get("disagreement_map", {})
+    for dim in rubric.dimensions:
+        item = disagreement_map.get(dim.id, {})
+        gap = item.get("score_gap")
+        if isinstance(gap, (int, float)):
+            print(f"{dim.name}: {float(gap):.1f}")
+        else:
+            print(f"{dim.name}: NA")
+    print(separator)
+
+    overall_score = result.get("overall_across_roles")
+    if isinstance(overall_score, (int, float)):
+        print(f"Overall Score: {float(overall_score):.1f}")
+    else:
+        print("Overall Score: NA")
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Role-aware multi-agent grading pipeline (heuristic scaffold)."
+        description="Role-aware multi-agent grading pipeline (orchestrated)."
     )
     parser.add_argument("--summary", type=str, help="Summary text to score.")
     parser.add_argument(
@@ -66,31 +108,75 @@ def main() -> int:
         default=str(Path("config/roles.json")),
         help="Path to roles JSON.",
     )
-    parser.add_argument("--engine", choices=["llm", "heuristic"], default="llm", help="Scoring engine to use.")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="OpenAI model for LLM scoring.")
-    parser.add_argument("--temperature", type=float, default=0.2, help="LLM sampling temperature.")
-    parser.add_argument("--format", choices=["human", "json"], default="human", help="Output format.")
-    parser.add_argument("--pretty", action="store_true", help="Pretty JSON output (json format only).")
+    parser.add_argument(
+        "--engine",
+        choices=["llm", "heuristic"],
+        default="llm",
+        help="Scoring engine to use.",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="gpt-4o-mini",
+        help="OpenAI model for LLM scoring.",
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.2, help="LLM sampling temperature."
+    )
+    parser.add_argument(
+        "--gap-threshold",
+        type=float,
+        default=0.5,
+        help="Disagreement threshold: flag dimension if max-min >= threshold.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["human", "json"],
+        default="human",
+        help="Output format.",
+    )
+    parser.add_argument(
+        "--pretty", action="store_true", help="Pretty JSON output (json format only)."
+    )
     parser.add_argument("--output", type=str, help="Write output JSON to this file.")
+    return parser
 
-    args = parser.parse_args()
-    summary = _load_summary(args)
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        summary = _validate_summary(_resolve_summary(args))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from exc
 
     rubric = load_rubric(args.rubric)
     roles = load_roles(args.roles, rubric.dimension_ids)
 
-    agents = asyncio.run(_run_agents(summary, roles, rubric, args.engine, args.model, args.temperature))
+    result = asyncio.run(
+        run_pipeline(
+            summary,
+            args.engine,
+            args.format,
+            rubric=rubric,
+            roles=roles,
+            model=args.model,
+            temperature=args.temperature,
+            gap_threshold=args.gap_threshold,
+            max_retries=2,
+        )
+    )
 
     if args.format == "human":
-        _print_human(agents, roles, rubric)
+        _print_human(result, rubric)
         return 0
 
     payload = {
         "summary": summary,
         "rubric_id": rubric.rubric_id,
-        "engine": args.engine,
-        "model": args.model if args.engine == "llm" else None,
-        "agents": [agent.to_dict() for agent in agents],
+        **result,
     }
 
     output = json.dumps(payload, indent=2 if args.pretty else None)
