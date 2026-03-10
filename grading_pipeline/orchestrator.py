@@ -9,6 +9,7 @@ from .config import RoleProfile, Rubric
 from .llm_scoring import score_summary_llm
 from .openai_client import OpenAIClientError, create_response, extract_json_output
 from .scoring import AgentScore, compute_overall_score, score_summary_heuristic
+from .validation import validate_summary_text
 
 DIMENSION_IDS = [
     "factual_accuracy",
@@ -251,6 +252,22 @@ def _apply_adjudication_updates(
                 )
 
 
+def _repair_disputed_fields(
+    target_scorecard: Dict[str, Any],
+    repaired_scorecard: Dict[str, Any],
+    disputed_dims: List[str],
+) -> None:
+    for dim in disputed_dims:
+        target_scorecard["scores"][dim] = float(repaired_scorecard["scores"][dim])
+        target_scorecard["rationales"][dim] = str(
+            repaired_scorecard["rationales"].get(dim, "")
+        )
+        if "evidence" in target_scorecard and "evidence" in repaired_scorecard:
+            target_scorecard["evidence"][dim] = list(
+                repaired_scorecard["evidence"].get(dim, [])
+            )
+
+
 def _aggregate_role_overalls(
     scorecards_by_role_id: Dict[str, Dict[str, Any]], roles_by_id: Dict[str, RoleProfile]
 ) -> float:
@@ -288,9 +305,7 @@ async def run_pipeline(
     if mode not in {"llm", "heuristic"}:
         raise ValueError(f"Unsupported mode: {mode}")
 
-    checked_summary = summary.strip()
-    if not checked_summary:
-        raise ValueError("summary cannot be empty")
+    checked_summary = validate_summary_text(summary)
 
     roles_by_id = {role.id: role for role in roles}
     missing_roles = [role_id for role_id in CANONICAL_ROLE_IDS if role_id not in roles_by_id]
@@ -384,8 +399,11 @@ async def run_pipeline(
 
                 retries += 1
                 repaired = await run_role(roles_by_id[role_id])
-                scorecards_by_role_id[role_id] = _agent_to_scorecard(
-                    repaired, roles_by_id[role_id]
+                repaired_scorecard = _agent_to_scorecard(repaired, roles_by_id[role_id])
+                _repair_disputed_fields(
+                    scorecards_by_role_id[role_id],
+                    repaired_scorecard,
+                    disputed_dims,
                 )
 
     disagreement_map = build_disagreement_map(scorecards_by_role_id, gap_threshold)

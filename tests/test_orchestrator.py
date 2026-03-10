@@ -4,6 +4,8 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict
 
+import pytest
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -179,6 +181,74 @@ def test_conditional_adjudication_in_llm_mode() -> None:
     assert by_role["physician"]["scores"]["factual_accuracy"] == 4.0
     assert by_role["triage_nurse"]["scores"]["factual_accuracy"] == 4.0
     assert by_role["bedside_nurse"]["scores"]["factual_accuracy"] == 4.0
+
+
+def test_run_pipeline_rejects_short_summary_programmatically() -> None:
+    rubric, roles = _load_config()
+
+    with pytest.raises(ValueError, match="at least 30 characters"):
+        asyncio.run(
+            run_pipeline(
+                summary="too short",
+                mode="heuristic",
+                output_format="json",
+                rubric=rubric,
+                roles=roles,
+            )
+        )
+
+
+def test_post_adjudication_repair_preserves_non_disputed_dimensions() -> None:
+    rubric, roles = _load_config()
+    calls = {role_id: 0 for role_id in CANONICAL_ROLE_IDS}
+
+    physician_initial = {dim: 3 for dim in DIMENSION_IDS}
+    triage_initial = {dim: 3 for dim in DIMENSION_IDS}
+    bedside_initial = {dim: 3 for dim in DIMENSION_IDS}
+    physician_initial["factual_accuracy"] = 5
+    triage_initial["factual_accuracy"] = 3
+    bedside_initial["factual_accuracy"] = 2
+
+    physician_repair = {dim: 1 for dim in DIMENSION_IDS}
+    physician_repair["factual_accuracy"] = 4
+
+    def role_scorer(summary, role, rubric):
+        calls[role.id] += 1
+        if role.id == "physician":
+            if calls[role.id] == 1:
+                return _make_agent(role.id, physician_initial, overall=3.0)
+            return _make_agent(role.id, physician_repair, overall=3.0)
+        if role.id == "triage_nurse":
+            return _make_agent(role.id, triage_initial, overall=3.0)
+        return _make_agent(role.id, bedside_initial, overall=3.0)
+
+    def invalid_adjudicator(**kwargs):
+        disputed_dims = kwargs["disputed_dims"]
+        updates = {role_id: {"scores": {}, "rationales": {}} for role_id in CANONICAL_ROLE_IDS}
+        updates["physician"] = {
+            "scores": {dim: 6 for dim in disputed_dims},
+            "rationales": {dim: "invalid" for dim in disputed_dims},
+        }
+        return updates
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient history includes chronic disease, medication changes, and enough detail for the pipeline to validate input.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            adjudicator=invalid_adjudicator,
+            gap_threshold=0.5,
+            max_retries=2,
+        )
+    )
+
+    physician = {card["role_id"]: card for card in result["per_role_scorecards"]}["physician"]
+    assert calls["physician"] == 2
+    assert physician["scores"]["factual_accuracy"] == 4.0
+    assert physician["scores"]["timeline_evolution"] == 3.0
 
 
 def test_aggregation_recomputes_role_overall_from_w_prior() -> None:

@@ -45,7 +45,6 @@ CHRONIC_KEYWORDS = [
     "stroke",
     "afib",
     "cad",
-    "ckd",
     "heart failure",
     "renal",
 ]
@@ -78,7 +77,6 @@ TEMPORAL_KEYWORDS = [
     "last",
     "recent",
     "since",
-    "for",
     "weeks",
     "days",
     "months",
@@ -116,6 +114,17 @@ STRUCTURE_MARKERS = [
 ]
 
 UNCERTAINTY_KEYWORDS = ["possible", "maybe", "unclear", "unknown", "?", "likely"]
+FACTUAL_EVIDENCE_KEYWORDS = [
+    "diagnosis",
+    "dx",
+    "lab",
+    "labs",
+    "imaging",
+    "meds",
+    "medications",
+    "allergy",
+    "allergies",
+]
 
 
 def _word_count(text: str) -> int:
@@ -127,11 +136,18 @@ def _sentence_lengths(text: str) -> List[int]:
     return [len(re.findall(r"\b\w+\b", s)) for s in sentences] or [0]
 
 
+def _keyword_pattern(keyword: str) -> str:
+    return rf"(?<!\w){re.escape(keyword)}(?!\w)"
+
+
 def _find_hits(text: str, keywords: List[str]) -> List[str]:
     hits: List[str] = []
     lowered = text.lower()
     for kw in keywords:
-        if kw in lowered:
+        if any(ch.isalnum() or ch == "_" for ch in kw):
+            if re.search(_keyword_pattern(kw), lowered):
+                hits.append(kw)
+        elif kw in lowered:
             hits.append(kw)
     return hits
 
@@ -182,7 +198,7 @@ def _score_clarity(text: str) -> Tuple[int, str, List[str]]:
 
 def _score_factual_accuracy(text: str) -> Tuple[int, str, List[str]]:
     score = 3
-    evidence = _find_hits(text, ["diagnosis", "dx", "lab", "imaging", "med", "allergy"])
+    evidence = _find_hits(text, FACTUAL_EVIDENCE_KEYWORDS)
     uncertainty = _find_hits(text, UNCERTAINTY_KEYWORDS)
     if evidence:
         score += 1
@@ -317,9 +333,7 @@ def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric) -> 
 
     _apply_role_adjustments(role.id, scores, rationales)
 
-    overall_notes = (
-        f"Role perspective: {role.name}. Summary length {word_count} words."
-    )
+    overall_notes = f"Role perspective: {role.name}. Summary length {word_count} words."
 
     for dim_id in rubric.dimension_ids:
         scores[dim_id] = max(1, min(5, int(scores[dim_id])))

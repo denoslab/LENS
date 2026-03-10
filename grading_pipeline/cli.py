@@ -7,12 +7,11 @@ from typing import Any, Dict, Sequence
 
 from .config import Rubric, load_roles, load_rubric
 from .orchestrator import run_pipeline
-
-
-MIN_SUMMARY_CHARS = 30
-EMPTY_SUMMARY_ERROR = "Error: summary is required and cannot be empty."
-SHORT_SUMMARY_ERROR = (
-    f"Error: summary must be at least {MIN_SUMMARY_CHARS} characters after trimming whitespace."
+from .validation import (
+    EMPTY_SUMMARY_ERROR,
+    MIN_SUMMARY_CHARS,
+    SHORT_SUMMARY_ERROR,
+    validate_summary_text,
 )
 
 
@@ -26,17 +25,7 @@ def _resolve_summary(args: argparse.Namespace) -> str | None:
 
 
 def _validate_summary(summary: str | None) -> str:
-    if summary is None:
-        raise ValueError(EMPTY_SUMMARY_ERROR)
-
-    cleaned = summary.strip()
-    if not cleaned:
-        raise ValueError(EMPTY_SUMMARY_ERROR)
-
-    if len(cleaned) < MIN_SUMMARY_CHARS:
-        raise ValueError(SHORT_SUMMARY_ERROR)
-
-    return cleaned
+    return validate_summary_text(summary)
 
 
 def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:

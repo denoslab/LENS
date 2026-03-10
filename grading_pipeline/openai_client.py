@@ -10,6 +10,10 @@ class OpenAIClientError(RuntimeError):
     pass
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DOTENV_PATH = PROJECT_ROOT / ".env"
+
+
 def _strip_inline_comment(value: str) -> str:
     if "#" not in value:
         return value
@@ -25,7 +29,7 @@ def _strip_inline_comment(value: str) -> str:
     return value
 
 
-def _read_dotenv(path: str) -> dict[str, str]:
+def _read_dotenv(path: str | Path) -> dict[str, str]:
     try:
         raw = Path(path).read_text()
     except FileNotFoundError:
@@ -37,7 +41,7 @@ def _read_dotenv(path: str) -> dict[str, str]:
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
-            line = line[len("export "):]
+            line = line[len("export ") :]
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
@@ -51,7 +55,7 @@ def _read_dotenv(path: str) -> dict[str, str]:
 
 
 def _resolve_api_key() -> str | None:
-    dotenv = _read_dotenv(".env")
+    dotenv = _read_dotenv(DOTENV_PATH)
     key = dotenv.get("OPENAI_API_KEY")
     if key:
         os.environ["OPENAI_API_KEY"] = key
