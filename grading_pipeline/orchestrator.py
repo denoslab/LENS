@@ -1,3 +1,18 @@
+"""Core orchestration logic for the multi-agent grading pipeline.
+
+Pipeline stages:
+  1. **Validate** the input summary.
+  2. **Parallel Score**: three clinical roles score independently via
+     ``asyncio.gather()``.
+  3. **Validate Scorecards**: retry any role whose output fails validation
+     (missing dims, out-of-range scores, etc.).
+  4. **Disagreement Map**: compute per-dimension cross-role score gaps.
+  5. **Conditional Adjudication** (LLM mode only): if any gap ≥ threshold,
+     an adjudicator LLM refines disputed dimensions.
+  6. **Aggregate**: compute per-role weighted overalls and cross-role mean.
+  7. **Return** structured result dict.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +26,7 @@ from .openai_client import OpenAIClientError, create_response, extract_json_outp
 from .scoring import AgentScore, compute_overall_score, score_summary_heuristic
 from .validation import validate_summary_text
 
+# The 8 canonical rubric dimension IDs, in display order.
 DIMENSION_IDS = [
     "factual_accuracy",
     "relevant_chronic_problem_coverage",
@@ -32,6 +48,7 @@ CANONICAL_ROLE_IDS = ["physician", "triage_nurse", "bedside_nurse"]
 
 
 def _normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
+    """Clip weights to ≥0 and normalize to sum to 1.  Falls back to uniform if all zero."""
     clipped = {dim: max(0.0, float(weights.get(dim, 0.0))) for dim in DIMENSION_IDS}
     total = sum(clipped.values())
     if total <= 0.0:
@@ -42,7 +59,11 @@ def _normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
 def calibrate_weights(
     w_prior: Dict[str, float], delta_w: Dict[str, float] | None = None
 ) -> Dict[str, float]:
-    # Step 5C stub: delta_w is intentionally a no-op for now.
+    """Combine prior weights with an optional delta adjustment and normalize.
+
+    Note: ``delta_w`` is currently a no-op stub (always zeros).  It exists
+    as a hook for future weight calibration logic.
+    """
     if delta_w is None:
         delta_w = {dim: 0.0 for dim in DIMENSION_IDS}
 
@@ -54,10 +75,16 @@ def calibrate_weights(
 
 
 def _to_role_name(role: RoleProfile) -> str:
+    """Map a RoleProfile to its human-readable display name."""
     return ROLE_NAME_BY_ID.get(role.id, role.name.replace(" Agent", ""))
 
 
 def _agent_to_scorecard(agent: AgentScore, role: RoleProfile) -> Dict[str, Any]:
+    """Convert an ``AgentScore`` into the mutable scorecard dict used internally.
+
+    The scorecard format has keys: role, role_id, scores, rationales, overall,
+    and optionally evidence.
+    """
     rationales = agent.rationales or {dim: "" for dim in DIMENSION_IDS}
     scorecard = {
         "role": _to_role_name(role),
@@ -74,6 +101,11 @@ def _agent_to_scorecard(agent: AgentScore, role: RoleProfile) -> Dict[str, Any]:
 
 
 def _validate_scorecard(scorecard: Dict[str, Any]) -> List[str]:
+    """Validate a scorecard dict, returning a list of error strings (empty = valid).
+
+    Checks: recognized role name, all 8 dimensions present with numeric
+    scores in [1, 5], all rationales present as strings, and overall in [1, 5].
+    """
     errors: List[str] = []
 
     role_name = scorecard.get("role")
@@ -120,6 +152,14 @@ def _validate_scorecard(scorecard: Dict[str, Any]) -> List[str]:
 def build_disagreement_map(
     scorecards_by_role_id: Dict[str, Dict[str, Any]], gap_threshold: float
 ) -> Dict[str, Dict[str, Any]]:
+    """Build a per-dimension disagreement map across the three roles.
+
+    For each dimension, computes the score gap (max - min) and flags
+    dimensions where the gap meets or exceeds ``gap_threshold``.
+
+    Returns:
+        Dict mapping dimension_id → {role_scores, score_gap, flag}.
+    """
     disagreement_map: Dict[str, Dict[str, Any]] = {}
 
     for dim in DIMENSION_IDS:
@@ -146,6 +186,15 @@ def _default_adjudicator(
     disputed_dims: List[str],
     model: str,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """LLM-based adjudicator that refines scores for disputed dimensions.
+
+    Sends the original summary, rubric subset, and all three role scorecards
+    to the LLM, asking it to produce updated scores and rationales *only*
+    for the disputed dimensions.  Uses temperature=0.0 for consistency.
+
+    Returns:
+        Nested dict: ``updates[role_id]["scores"|"rationales"][dim_id]``.
+    """
     score_props = {
         dim: {"type": "number", "minimum": 1, "maximum": 5} for dim in disputed_dims
     }
@@ -235,6 +284,11 @@ def _apply_adjudication_updates(
     updates: Dict[str, Dict[str, Dict[str, Any]]],
     disputed_dims: List[str],
 ) -> None:
+    """Merge adjudicator updates into the live scorecards (in place).
+
+    Only overwrites disputed dimension scores and rationales; non-disputed
+    dimensions are preserved unchanged.
+    """
     for role_id in CANONICAL_ROLE_IDS:
         if role_id not in updates:
             continue
@@ -257,6 +311,12 @@ def _repair_disputed_fields(
     repaired_scorecard: Dict[str, Any],
     disputed_dims: List[str],
 ) -> None:
+    """Copy disputed-dimension fields from a freshly re-scored scorecard into the target.
+
+    Used after post-adjudication validation fails: re-score the role and
+    selectively patch only the disputed dimensions, preserving non-disputed
+    fields from the adjudicated result.
+    """
     for dim in disputed_dims:
         target_scorecard["scores"][dim] = float(repaired_scorecard["scores"][dim])
         target_scorecard["rationales"][dim] = str(
@@ -271,6 +331,12 @@ def _repair_disputed_fields(
 def _aggregate_role_overalls(
     scorecards_by_role_id: Dict[str, Dict[str, Any]], roles_by_id: Dict[str, RoleProfile]
 ) -> float:
+    """Compute per-role weighted overalls and the cross-role mean.
+
+    For each role: calibrates weights, computes weighted average across
+    dimensions, and stores the result back into the scorecard.  Returns
+    the mean of the three role overalls (rounded to 4 decimal places).
+    """
     per_role_overalls: List[float] = []
 
     for role_id in CANONICAL_ROLE_IDS:
@@ -302,6 +368,26 @@ async def run_pipeline(
     role_scorer: Callable[[str, RoleProfile, Rubric], AgentScore] | None = None,
     adjudicator: Callable[..., Dict[str, Dict[str, Dict[str, Any]]]] | None = None,
 ) -> Dict[str, Any]:
+    """Run the full grading pipeline end-to-end.
+
+    Args:
+        summary: Raw clinical summary text.
+        mode: ``"llm"`` or ``"heuristic"``.
+        output_format: ``"human"`` or ``"json"`` (passed through to meta).
+        rubric: Loaded rubric with dimension definitions.
+        roles: List of 3 ``RoleProfile`` instances.
+        model: OpenAI model ID (LLM mode only).
+        temperature: Sampling temperature (LLM mode only).
+        gap_threshold: Min score gap to trigger adjudication.
+        max_retries: Max re-scoring attempts per role on validation failure.
+        role_scorer: Optional override for the per-role scoring function
+            (useful for testing without API calls).
+        adjudicator: Optional override for the adjudication function.
+
+    Returns:
+        Dict with keys: ``per_role_scorecards``, ``disagreement_map``,
+        ``adjudication_ran``, ``overall_across_roles``, ``meta``.
+    """
     if mode not in {"llm", "heuristic"}:
         raise ValueError(f"Unsupported mode: {mode}")
 

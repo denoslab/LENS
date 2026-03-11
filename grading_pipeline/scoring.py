@@ -1,3 +1,21 @@
+"""Heuristic (keyword-based) scoring engine for clinical summaries.
+
+This module provides a fast, deterministic baseline scorer that requires
+no API key.  Each of the 8 rubric dimensions has its own scoring function
+that inspects the summary text for keyword hits, structural markers,
+sentence statistics, and word count.
+
+Scoring flow for one role:
+  1. Run all 8 dimension scorers independently.
+  2. Apply role-specific adjustments (``_apply_role_adjustments``).
+  3. Clamp all scores to [1, 5].
+  4. Compute a weighted overall using the role's ``w_prior`` weights.
+
+Score scale: 1 (worst) to 5 (best) per dimension.
+"""
+
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
@@ -7,6 +25,17 @@ from .config import RoleProfile, Rubric
 
 @dataclass(frozen=True)
 class AgentScore:
+    """Container for a single role's scoring output.
+
+    Attributes:
+        role_id: Which clinical role produced this score.
+        scores: Mapping of dimension_id → integer score (1-5).
+        rationales: Optional per-dimension textual justification.
+        evidence: Optional per-dimension list of matched keywords/evidence.
+        overall_notes: Free-text note about the role's perspective.
+        warnings: Any warnings generated during scoring (e.g. empty input).
+        overall_score: Weighted average across dimensions (computed post-scoring).
+    """
     role_id: str
     scores: Dict[str, int]
     rationales: Dict[str, str] | None = None
@@ -33,6 +62,12 @@ class AgentScore:
             payload["warnings"] = self.warnings
         return payload
 
+
+# ---------------------------------------------------------------------------
+# Keyword lists used by the dimension scorers.
+# Each list targets a specific clinical concept.  Keywords are matched as
+# whole words (word-boundary regex) to avoid false positives from substrings.
+# ---------------------------------------------------------------------------
 
 CHRONIC_KEYWORDS = [
     "diabetes",
@@ -127,20 +162,37 @@ FACTUAL_EVIDENCE_KEYWORDS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Text analysis helpers
+# ---------------------------------------------------------------------------
+
+
 def _word_count(text: str) -> int:
+    """Count words using word-boundary regex (handles punctuation/hyphens)."""
     return len(re.findall(r"\b\w+\b", text))
 
 
 def _sentence_lengths(text: str) -> List[int]:
+    """Return a list of word counts per sentence (split on `.`, `!`, `?`).
+
+    Returns ``[0]`` for empty text so callers can safely compute averages.
+    """
     sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
     return [len(re.findall(r"\b\w+\b", s)) for s in sentences] or [0]
 
 
 def _keyword_pattern(keyword: str) -> str:
+    """Build a regex that matches *keyword* as a whole word (not a substring)."""
     return rf"(?<!\w){re.escape(keyword)}(?!\w)"
 
 
 def _find_hits(text: str, keywords: List[str]) -> List[str]:
+    """Return which keywords appear in *text* (case-insensitive, whole-word).
+
+    Alphanumeric keywords use word-boundary matching to prevent false
+    positives (e.g. "days" won't match inside "holidays").  Pure
+    punctuation keywords (like "?") use simple substring search.
+    """
     hits: List[str] = []
     lowered = text.lower()
     for kw in keywords:
@@ -153,6 +205,7 @@ def _find_hits(text: str, keywords: List[str]) -> List[str]:
 
 
 def _score_from_hits(count: int) -> int:
+    """Map a keyword hit count to a 1-5 score: 0→1, 1→2, 2-3→3, 4-5→4, 6+→5."""
     if count >= 6:
         return 5
     if count >= 4:
@@ -165,6 +218,11 @@ def _score_from_hits(count: int) -> int:
 
 
 def _score_focus_by_length(word_count: int) -> Tuple[int, str]:
+    """Score the ``focused_not_cluttered`` dimension based on word count.
+
+    Ideal range is 80-200 words (score 5).  Scores decrease as length
+    deviates further from this window in either direction.
+    """
     if 80 <= word_count <= 200:
         return 5, "Length is concise and focused."
     if 50 <= word_count <= 79 or 201 <= word_count <= 260:
@@ -177,6 +235,11 @@ def _score_focus_by_length(word_count: int) -> Tuple[int, str]:
 
 
 def _score_clarity(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``clarity_readability_formatting`` via sentence length and structure markers.
+
+    Starts at 3, +1 for short avg sentences (≤12 words), -1 for long (≥30),
+    +1 if structural markers (bullets, numbered lists, section headers) are present.
+    """
     lengths = _sentence_lengths(text)
     avg_len = sum(lengths) / max(len(lengths), 1)
     markers = [m for m in STRUCTURE_MARKERS if m in text.lower()]
@@ -197,6 +260,11 @@ def _score_clarity(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_factual_accuracy(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``factual_accuracy`` using evidence keywords and uncertainty language.
+
+    Starts at 3, +1 for clinical evidence terms, -1 for uncertainty hedges,
+    -1 if very short (<40 words) since brevity risks factual omissions.
+    """
     score = 3
     evidence = _find_hits(text, FACTUAL_EVIDENCE_KEYWORDS)
     uncertainty = _find_hits(text, UNCERTAINTY_KEYWORDS)
@@ -217,6 +285,7 @@ def _score_factual_accuracy(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_organized(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``organized_by_condition`` by counting structural markers (bullets, headers)."""
     markers = [m for m in STRUCTURE_MARKERS if m in text.lower()]
     marker_count = len(markers)
     if marker_count >= 4:
@@ -234,6 +303,7 @@ def _score_organized(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_timeline(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``timeline_evolution`` by counting temporal keyword hits."""
     hits = _find_hits(text, TEMPORAL_KEYWORDS)
     score = _score_from_hits(len(hits))
     rationale = "Temporal cues help track evolution."
@@ -243,6 +313,7 @@ def _score_timeline(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_recent_changes(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``recent_changes_highlighted`` by counting change-related keyword hits."""
     hits = _find_hits(text, RECENT_CHANGE_KEYWORDS)
     score = _score_from_hits(len(hits))
     rationale = "Recent changes are explicitly called out."
@@ -252,6 +323,7 @@ def _score_recent_changes(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_chronic_coverage(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``relevant_chronic_problem_coverage`` by counting chronic-condition keyword hits."""
     hits = _find_hits(text, CHRONIC_KEYWORDS)
     score = _score_from_hits(len(hits))
     rationale = "Chronic condition coverage is represented."
@@ -261,6 +333,7 @@ def _score_chronic_coverage(text: str) -> Tuple[int, str, List[str]]:
 
 
 def _score_decision_usefulness(text: str) -> Tuple[int, str, List[str]]:
+    """Score ``usefulness_for_decision_making`` by counting clinical-decision keyword hits."""
     hits = _find_hits(text, DECISION_KEYWORDS)
     score = _score_from_hits(len(hits))
     rationale = "Decision-supporting details are present."
@@ -272,6 +345,11 @@ def _score_decision_usefulness(text: str) -> Tuple[int, str, List[str]]:
 def compute_overall_score(
     scores: Dict[str, int], weights: Dict[str, float], dimension_ids: List[str]
 ) -> float:
+    """Compute a weighted average score across dimensions.
+
+    If total weight is zero (or all weights missing), falls back to a
+    simple unweighted mean.  Result is rounded to 2 decimal places.
+    """
     total_weight = sum(weights.get(dim, 0.0) for dim in dimension_ids)
     if total_weight <= 0:
         total_weight = float(len(dimension_ids) or 1)
@@ -281,6 +359,20 @@ def compute_overall_score(
 
 
 def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric) -> AgentScore:
+    """Score a clinical summary using the keyword-based heuristic engine.
+
+    Runs all 8 dimension scorers, applies role-specific adjustments,
+    clamps to [1, 5], and computes the weighted overall score.
+
+    Args:
+        summary: The clinical summary text to evaluate.
+        role: The clinical role whose perspective to apply.
+        rubric: The evaluation rubric (defines which dimensions to score).
+
+    Returns:
+        An ``AgentScore`` with per-dimension scores, rationales, evidence,
+        and a weighted overall score.
+    """
     summary = summary.strip()
     warnings: List[str] = []
     if not summary:
@@ -354,6 +446,15 @@ def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric) -> 
 def _apply_role_adjustments(
     role_id: str, scores: Dict[str, int], rationales: Dict[str, str]
 ) -> None:
+    """Apply role-specific score adjustments that reflect clinical priorities.
+
+    - **Physician**: penalizes low decision-usefulness (expects richer data).
+    - **Triage Nurse**: penalizes poor focus and clarity (needs fast scanning).
+    - **Bedside Nurse**: boosts recent-changes and decision-usefulness
+      (values actionable care details).
+
+    Modifies *scores* and *rationales* dicts in place.
+    """
     if role_id == "physician":
         if scores["usefulness_for_decision_making"] <= 2:
             scores["usefulness_for_decision_making"] = max(

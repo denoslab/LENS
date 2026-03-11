@@ -1,3 +1,14 @@
+"""Command-line interface for the LENS grading pipeline.
+
+Usage examples::
+
+    python -m grading_pipeline --summary "Patient presents with..." --engine heuristic
+    python -m grading_pipeline --summary-file note.txt --engine llm --model gpt-4o
+    python -m grading_pipeline --summary "..." --engine heuristic --format json --pretty
+"""
+
+from __future__ import annotations
+
 import argparse
 import asyncio
 import json
@@ -16,7 +27,12 @@ from .validation import (
 
 
 def _resolve_summary(args: argparse.Namespace) -> str | None:
-    # Treat --summary "" as explicitly provided input; do not fall back.
+    """Read summary text from ``--summary`` flag or ``--summary-file`` path.
+
+    Returns ``None`` if neither was provided (triggers a validation error
+    downstream).  Treats ``--summary ""`` as explicit empty input — does
+    not fall back to ``--summary-file``.
+    """
     if args.summary is not None:
         return args.summary
     if args.summary_file:
@@ -25,10 +41,12 @@ def _resolve_summary(args: argparse.Namespace) -> str | None:
 
 
 def _validate_summary(summary: str | None) -> str:
+    """Thin wrapper around ``validate_summary_text`` for CLI use."""
     return validate_summary_text(summary)
 
 
 def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
+    """Format and print pipeline results as a human-readable report to stdout."""
     separator = "----------------------------------------"
 
     # Keep one empty line before the formatted report block.
@@ -78,6 +96,7 @@ def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Create the CLI argument parser with all pipeline options."""
     parser = argparse.ArgumentParser(
         description="Role-aware multi-agent grading pipeline (orchestrated)."
     )
@@ -132,6 +151,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entry point.  Parses args, runs the pipeline, and prints output.
+
+    Returns 0 on success, 2 on input validation errors.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
