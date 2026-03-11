@@ -29,7 +29,7 @@ pytest -q
 
 The pipeline flows: **Input → Validate → Parallel Score (3 roles) → Validate Scorecards → Disagreement Map → Conditional Adjudication → Aggregate → Format Output**
 
-### Source Layout (`grading_pipeline/`)
+### Source Layout (`src/grading_pipeline/`)
 
 - **`cli.py`** — CLI argument parsing, entry point (`main()`), human-readable output formatting
 - **`orchestrator.py`** — Core pipeline logic: `run_pipeline()` coordinates async parallel scoring via `asyncio.gather()`, scorecard validation with retry, disagreement detection (`build_disagreement_map()`), conditional adjudication (LLM mode only, triggered when score gap ≥ threshold), and weighted aggregation

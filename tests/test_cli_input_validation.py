@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -6,7 +7,7 @@ import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from grading_pipeline import cli
 
@@ -18,11 +19,13 @@ SHORT_ERROR = (
 
 
 def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, "PYTHONPATH": str(PROJECT_ROOT / "src")}
     return subprocess.run(
         [sys.executable, "-m", "grading_pipeline", *args],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 

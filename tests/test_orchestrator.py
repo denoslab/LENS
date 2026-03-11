@@ -8,7 +8,7 @@ import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from grading_pipeline.config import load_roles, load_rubric
 from grading_pipeline.orchestrator import (
