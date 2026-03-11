@@ -25,7 +25,7 @@ class OpenAIClientError(RuntimeError):
     pass
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOTENV_PATH = PROJECT_ROOT / ".env"
 
 

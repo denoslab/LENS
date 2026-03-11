@@ -1,3 +1,8 @@
 *.pyc
 .env
 __pycache__/
+dist/
+build/
+*.egg-info/
+_site/
+.pytest_cache/

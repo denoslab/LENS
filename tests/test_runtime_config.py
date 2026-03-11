@@ -7,7 +7,7 @@ import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from grading_pipeline import openai_client
 from grading_pipeline.scoring import _score_decision_usefulness, _score_timeline
