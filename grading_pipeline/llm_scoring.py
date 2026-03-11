@@ -1,3 +1,14 @@
+"""LLM-based scoring engine using the OpenAI Responses API.
+
+Builds role-specific prompts from persona + profile + rubric, sends them
+to OpenAI with a strict JSON schema, and parses the structured response
+into an ``AgentScore``.
+
+The prompt includes global scoring anchors (1-5 scale), hard constraints
+(e.g. missing evidence → score ≤ 2), and the role's full prompt profile
+so the model applies role-appropriate evaluation priorities.
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,6 +20,11 @@ from .scoring import AgentScore, compute_overall_score
 
 
 def _build_score_schema(rubric: Rubric) -> Dict[str, Any]:
+    """Build the JSON schema that constrains the model's output format.
+
+    Returns a schema requiring ``role_id`` (string) and ``score`` (object
+    with one integer 1-5 field per rubric dimension).
+    """
     score_props: Dict[str, Any] = {}
     for dim in rubric.dimensions:
         score_props[dim.id] = {
@@ -34,12 +50,18 @@ def _build_score_schema(rubric: Rubric) -> Dict[str, Any]:
 
 
 def _role_profile_json(role: RoleProfile) -> str:
+    """Serialize the role's LLM prompt profile to a JSON string for prompt injection."""
     if not role.prompt_profile:
         return "{}"
     return json.dumps(role.prompt_profile, ensure_ascii=True, indent=2, sort_keys=True)
 
 
 def _build_instructions(role: RoleProfile, rubric: Rubric) -> str:
+    """Assemble the full system-level instruction prompt for a scoring call.
+
+    Includes: role identity, persona, scoring anchors, hard constraints,
+    the role's prompt profile JSON, and all rubric dimension definitions.
+    """
     lines = [
         "You are scoring a clinical summary for ED handoff.",
         f"Role: {role.name}",
@@ -85,6 +107,24 @@ def score_summary_llm(
     model: str = "gpt-4o-mini",
     temperature: float = 0.2,
 ) -> AgentScore:
+    """Score a clinical summary using an LLM via the OpenAI Responses API.
+
+    Args:
+        summary: The clinical summary text to evaluate.
+        role: The clinical role whose perspective to apply.
+        rubric: The evaluation rubric (defines which dimensions to score).
+        model: OpenAI model identifier.
+        temperature: Sampling temperature (lower = more deterministic).
+
+    Returns:
+        An ``AgentScore`` with per-dimension integer scores and a weighted
+        overall.  Rationales are not returned by this engine (only the
+        heuristic engine produces them).
+
+    Raises:
+        OpenAIClientError: If the API call fails, the response is malformed,
+            or any score is missing / out of range.
+    """
     schema = _build_score_schema(rubric)
     instructions = _build_instructions(role, rubric)
 

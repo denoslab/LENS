@@ -1,3 +1,17 @@
+"""Minimal HTTP client for the OpenAI Responses API.
+
+Uses only stdlib (``urllib``) — no external dependencies.  Handles:
+  - ``.env`` file parsing for ``OPENAI_API_KEY``
+  - Building and sending JSON requests to the Responses API
+  - Extracting structured JSON output from the response
+
+The base URL defaults to ``https://api.openai.com/v1/responses`` but can
+be overridden via the ``OPENAI_BASE_URL`` environment variable (useful for
+proxies or local testing).
+"""
+
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
@@ -7,6 +21,7 @@ from typing import Any, Dict
 
 
 class OpenAIClientError(RuntimeError):
+    """Raised for any OpenAI API communication or response-parsing failure."""
     pass
 
 
@@ -15,6 +30,7 @@ DOTENV_PATH = PROJECT_ROOT / ".env"
 
 
 def _strip_inline_comment(value: str) -> str:
+    """Remove an inline ``# comment`` from a .env value, respecting quotes."""
     if "#" not in value:
         return value
     in_single = False
@@ -30,6 +46,9 @@ def _strip_inline_comment(value: str) -> str:
 
 
 def _read_dotenv(path: str | Path) -> dict[str, str]:
+    """Parse a ``.env`` file into a dict.  Handles comments, ``export`` prefix,
+    quoted values, and inline comments.  Returns empty dict if file is missing.
+    """
     try:
         raw = Path(path).read_text()
     except FileNotFoundError:
@@ -55,6 +74,11 @@ def _read_dotenv(path: str | Path) -> dict[str, str]:
 
 
 def _resolve_api_key() -> str | None:
+    """Resolve the OpenAI API key: .env file takes priority, then env var.
+
+    If found in .env, the key is also injected into ``os.environ`` so
+    downstream code can access it consistently.
+    """
     dotenv = _read_dotenv(DOTENV_PATH)
     key = dotenv.get("OPENAI_API_KEY")
     if key:
@@ -78,6 +102,15 @@ def create_response(
     json_schema: Dict[str, Any],
     temperature: float = 0.2,
 ) -> Dict[str, Any]:
+    """Send a request to the OpenAI Responses API and return the raw JSON response.
+
+    Uses ``json_schema`` for structured output (strict mode), ensuring the
+    model returns JSON conforming to the provided schema.
+
+    Raises:
+        OpenAIClientError: If the API key is missing, or the request fails
+            with an HTTP or network error.
+    """
     api_key = _resolve_api_key()
     if not api_key:
         raise OpenAIClientError("OPENAI_API_KEY is not set.")
@@ -117,6 +150,15 @@ def create_response(
 
 
 def extract_json_output(response: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract and parse JSON from an OpenAI Responses API response.
+
+    Handles two response formats:
+      - Shortcut: ``response["output_text"]`` (newer API versions)
+      - Nested: ``response["output"][*]["content"][*]["text"]`` (standard format)
+
+    Raises:
+        OpenAIClientError: If no text output is found or JSON parsing fails.
+    """
     if isinstance(response, dict) and response.get("output_text"):
         text = response["output_text"]
     else:
