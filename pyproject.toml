@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "edlens"
-version = "0.1.0"
+version = "0.1.2"
 description = "Role-aware multi-agent grading pipeline for clinical ED handoff summaries"
 readme = "README.md"
 license = "MIT"
