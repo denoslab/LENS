@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/LENS-logo.png" alt="LENS Logo" width="200">
+</p>
+
 # LENS: A Role-Aware Evaluation Framework
 
 LENS is a role-aware multi-agent grading pipeline for clinical summaries. The same summary is scored in parallel by three role-specific agents:
