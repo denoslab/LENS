@@ -4,6 +4,13 @@
   <img src="static/LENS-logo.png" alt="LENS Logo" width="300">
 </p>
 
+<p align="center">
+  <a href="https://github.com/denoslab/LENS/actions/workflows/ci.yml"><img src="https://github.com/denoslab/LENS/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/denoslab/LENS/actions/workflows/docs.yml"><img src="https://github.com/denoslab/LENS/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
+  <a href="https://github.com/denoslab/LENS/actions/workflows/docker.yml"><img src="https://github.com/denoslab/LENS/actions/workflows/docker.yml/badge.svg" alt="Docker"></a>
+  <a href="https://denoslab.com/LENS/"><img src="https://img.shields.io/badge/docs-online-blue" alt="API Docs"></a>
+</p>
+
 LENS is a role-aware multi-agent grading pipeline for clinical summaries. The same summary is scored in parallel by three role-specific agents:
 
 - `Physician`
