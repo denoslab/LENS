@@ -6,3 +6,6 @@ build/
 *.egg-info/
 _site/
 .pytest_cache/
+.DS_Store
+*.patch
+reports/cli_sensitivity_experiment/outputs/
