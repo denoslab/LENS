@@ -7,7 +7,7 @@ LENS is a role-aware multi-agent grading pipeline for clinical (ED handoff) summ
 Install the package:
 
 ```bash
-pip install lens-grading
+pip install edlens
 ```
 
 Run with the heuristic baseline (no API key needed):

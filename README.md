@@ -46,29 +46,43 @@ Each role scores the summary across 8 rubric dimensions on a `1-5` scale. The sy
 
 ## Repository Structure
 
-- `config/lens_rubric.json`
-  Defines the 8 rubric dimensions and evaluation focus.
-- `config/roles.json`
-  Defines the three role agents, persona metadata, and `w_prior` weights.
-- `grading_pipeline/cli.py`
-  Command-line entrypoint and human-readable output formatting.
-- `grading_pipeline/orchestrator.py`
-  Runs the multi-agent pipeline, validation, disagreement mapping, and aggregation.
-- `grading_pipeline/llm_scoring.py`
-  LLM-based scoring logic.
-- `grading_pipeline/scoring.py`
-  Heuristic baseline scoring and score utilities.
-- `grading_pipeline/openai_client.py`
-  Minimal OpenAI Responses API client.
-- `tests/`
-  Input-validation and orchestrator tests.
+- `src/grading_pipeline/`
+  Python package (published on PyPI as **`edlens`**).
+  - `cli.py` — Command-line entrypoint and human-readable output formatting
+  - `orchestrator.py` — Multi-agent pipeline, validation, disagreement mapping, and aggregation
+  - `llm_scoring.py` — LLM-based scoring logic
+  - `scoring.py` — Heuristic baseline scoring and score utilities
+  - `openai_client.py` — Minimal OpenAI Responses API client
+  - `config.py` — Rubric/role configuration loaders
+  - `validation.py` — Input validation
+- `config/`
+  - `lens_rubric.json` — 8 rubric dimensions and evaluation focus
+  - `roles.json` — Role agents, persona metadata, and `w_prior` weights
+  - `role_profiles/` — Role-specific LLM scoring profiles
+- `schemas/`
+  - `agent_output.schema.json` — JSON Schema for structured agent output
+- `docs/` — API reference (mkdocs + mkdocs-material)
+- `tests/` — Input-validation and orchestrator tests
+- `Dockerfile` — Container image for running the pipeline
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - OpenAI API key for `llm` mode
 
-This project uses the Python standard library only. There is no dependency installation step at the moment.
+### Installation
+
+```bash
+pip install edlens
+```
+
+Or install from source with dev and docs extras:
+
+```bash
+pip install -e ".[dev,docs]"
+```
+
+The package has no runtime dependencies beyond the Python standard library.
 
 ## API Key Setup
 
@@ -111,31 +125,40 @@ Important notes:
 Run with the default LLM mode:
 ```bash
 python -m grading_pipeline --summary "Your summary here"
+# or, using the installed CLI entry point:
+lens --summary "Your summary here"
 ```
 
 Run with the heuristic baseline:
 ```bash
-python -m grading_pipeline --engine heuristic --summary "Your summary here"
+lens --engine heuristic --summary "Your summary here"
 ```
 
 Use a summary file:
 ```bash
-python -m grading_pipeline --summary-file path/to/summary.txt
+lens --summary-file path/to/summary.txt
 ```
 
 Output JSON instead of the human-readable report:
 ```bash
-python -m grading_pipeline --summary "Your summary here" --format json --pretty
+lens --summary "Your summary here" --format json --pretty
 ```
 
 Select a specific model:
 ```bash
-python -m grading_pipeline --model gpt-4o-mini --summary "Your summary here"
+lens --model gpt-4o-mini --summary "Your summary here"
 ```
 
 Adjust the disagreement threshold:
 ```bash
-python -m grading_pipeline --gap-threshold 0.5 --summary "Your summary here"
+lens --gap-threshold 0.5 --summary "Your summary here"
+```
+
+### Docker
+
+```bash
+docker build -t lens .
+docker run lens --summary "Your summary here" --engine heuristic
 ```
 
 ## Input Rules
