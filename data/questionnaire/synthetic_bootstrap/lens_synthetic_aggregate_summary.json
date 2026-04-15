@@ -1,0 +1,262 @@
+{
+  "simulation_name": "LENS Calgary ED synthetic bootstrap survey",
+  "version": "v1",
+  "simulation_seed": 20260414,
+  "respondent_count": 100,
+  "questionnaire_source": "LLM4ED__Emergency_Department_Summary_Quality_Study.pdf",
+  "role_allocation_method": {
+    "physician_anchor_counts": {
+      "calgary_dem_2024_active_physician_staff": 202,
+      "calgary_dem_current_physicians_on_about_page": 240,
+      "midpoint_used_for_sampling": 221.0
+    },
+    "nursing_anchor_counts": {
+      "department_level_nurse_anchor": 1000,
+      "triage_share_of_nursing_pool_assumption": 0.15,
+      "triage_anchor_count": 150.0,
+      "bedside_anchor_count": 850.0
+    },
+    "resulting_target_proportions": {
+      "emergency_medicine_physician": 0.180999180999181,
+      "triage_nurse": 0.12285012285012285,
+      "bedside_nurse": 0.6961506961506961
+    },
+    "final_sample_counts": {
+      "emergency_medicine_physician": 18,
+      "triage_nurse": 12,
+      "bedside_nurse": 70
+    }
+  },
+  "overall_dimension_average_rank": {
+    "factual_accuracy": 2.53,
+    "relevant_chronic_problem_coverage": 3.74,
+    "organized_by_condition": 6.53,
+    "timeline_evolution": 6.18,
+    "recent_changes_highlighted": 3.62,
+    "focused_not_cluttered": 5.05,
+    "usefulness_for_decision_making": 4.15,
+    "clarity_readability_formatting": 4.2
+  },
+  "overall_dimension_weights": {
+    "factual_accuracy": 0.17972222222222223,
+    "relevant_chronic_problem_coverage": 0.1461111111111111,
+    "organized_by_condition": 0.06861111111111112,
+    "timeline_evolution": 0.07833333333333332,
+    "recent_changes_highlighted": 0.14944444444444444,
+    "focused_not_cluttered": 0.10972222222222222,
+    "usefulness_for_decision_making": 0.13472222222222222,
+    "clarity_readability_formatting": 0.13333333333333333
+  },
+  "per_role": {
+    "emergency_medicine_physician": {
+      "role_label": "Emergency medicine physician",
+      "respondent_count": 18,
+      "years_in_ed_distribution": {
+        "8-15 years": 5,
+        "1-3 years": 5,
+        "More than 15 years": 4,
+        "4-7 years": 4
+      },
+      "dimension_average_rank": {
+        "factual_accuracy": 2.4444444444444446,
+        "relevant_chronic_problem_coverage": 4.611111111111111,
+        "organized_by_condition": 7.555555555555555,
+        "timeline_evolution": 4.277777777777778,
+        "recent_changes_highlighted": 3.3333333333333335,
+        "focused_not_cluttered": 5.5,
+        "usefulness_for_decision_making": 3.2777777777777777,
+        "clarity_readability_formatting": 5.0
+      },
+      "dimension_weights": {
+        "factual_accuracy": 0.18209876543209877,
+        "relevant_chronic_problem_coverage": 0.1219135802469136,
+        "organized_by_condition": 0.040123456790123455,
+        "timeline_evolution": 0.13117283950617284,
+        "recent_changes_highlighted": 0.1574074074074074,
+        "focused_not_cluttered": 0.09722222222222222,
+        "usefulness_for_decision_making": 0.15895061728395063,
+        "clarity_readability_formatting": 0.1111111111111111
+      },
+      "top_preferences": {
+        "unacceptable_error": {
+          "Containing incorrect information": 11,
+          "Missing Critical Information": 6,
+          "Other": 1
+        },
+        "preferred_format": {
+          "Bullet Points": 8,
+          "Hybrid": 8,
+          "Narrative Paragraphs": 1,
+          "Other": 1
+        },
+        "role_customization_importance": {
+          "Very important": 15,
+          "Somewhat important": 3
+        },
+        "preferred_length": {
+          "Balanced": 12,
+          "Comprehensive": 5,
+          "Brevity": 1
+        },
+        "interpretation_preference": {
+          "Interpretation only when needed": 9,
+          "Some interpretation": 5,
+          "Substantial interpretation": 3,
+          "No interpretation": 1
+        },
+        "critical_findings_presentation": {
+          "Depends on severity": 9,
+          "Clearly highlighted at the very top": 8,
+          "Highlighted in context within the body": 1
+        },
+        "verifiability_importance": {
+          "Important": 9,
+          "Critically important": 8,
+          "Somewhat important": 1
+        }
+      }
+    },
+    "triage_nurse": {
+      "role_label": "Triage nurse",
+      "respondent_count": 12,
+      "years_in_ed_distribution": {
+        "8-15 years": 7,
+        "1-3 years": 2,
+        "4-7 years": 2,
+        "More than 15 years": 1
+      },
+      "dimension_average_rank": {
+        "factual_accuracy": 2.8333333333333335,
+        "relevant_chronic_problem_coverage": 5.833333333333333,
+        "organized_by_condition": 7.166666666666667,
+        "timeline_evolution": 7.333333333333333,
+        "recent_changes_highlighted": 2.0,
+        "focused_not_cluttered": 4.5,
+        "usefulness_for_decision_making": 2.8333333333333335,
+        "clarity_readability_formatting": 3.5
+      },
+      "dimension_weights": {
+        "factual_accuracy": 0.1712962962962963,
+        "relevant_chronic_problem_coverage": 0.08796296296296297,
+        "organized_by_condition": 0.05092592592592592,
+        "timeline_evolution": 0.0462962962962963,
+        "recent_changes_highlighted": 0.19444444444444445,
+        "focused_not_cluttered": 0.125,
+        "usefulness_for_decision_making": 0.1712962962962963,
+        "clarity_readability_formatting": 0.1527777777777778
+      },
+      "top_preferences": {
+        "unacceptable_error": {
+          "Missing Critical Information": 6,
+          "Containing incorrect information": 3,
+          "Other": 1,
+          "Excessive length or clutter that makes key points hard to find": 1,
+          "Being too vague or generic to be useful": 1
+        },
+        "preferred_format": {
+          "Bullet Points": 9,
+          "Hybrid": 2,
+          "Other": 1
+        },
+        "role_customization_importance": {
+          "Very important": 11,
+          "Somewhat important": 1
+        },
+        "preferred_length": {
+          "Brevity": 7,
+          "Balanced": 5
+        },
+        "interpretation_preference": {
+          "Interpretation only when needed": 5,
+          "Some interpretation": 4,
+          "Substantial interpretation": 2,
+          "No interpretation": 1
+        },
+        "critical_findings_presentation": {
+          "Clearly highlighted at the very top": 10,
+          "Depends on severity": 1,
+          "No special highlighting needed": 1
+        },
+        "verifiability_importance": {
+          "Important": 7,
+          "Critically important": 3,
+          "Somewhat important": 2
+        }
+      }
+    },
+    "bedside_nurse": {
+      "role_label": "Bedside nurse",
+      "respondent_count": 70,
+      "years_in_ed_distribution": {
+        "4-7 years": 23,
+        "1-3 years": 19,
+        "8-15 years": 15,
+        "More than 15 years": 9,
+        "Less than 1 year": 4
+      },
+      "dimension_average_rank": {
+        "factual_accuracy": 2.5,
+        "relevant_chronic_problem_coverage": 3.157142857142857,
+        "organized_by_condition": 6.1571428571428575,
+        "timeline_evolution": 6.4714285714285715,
+        "recent_changes_highlighted": 3.9714285714285715,
+        "focused_not_cluttered": 5.0285714285714285,
+        "usefulness_for_decision_making": 4.6,
+        "clarity_readability_formatting": 4.114285714285714
+      },
+      "dimension_weights": {
+        "factual_accuracy": 0.18055555555555555,
+        "relevant_chronic_problem_coverage": 0.16230158730158728,
+        "organized_by_condition": 0.07896825396825397,
+        "timeline_evolution": 0.07023809523809524,
+        "recent_changes_highlighted": 0.13968253968253969,
+        "focused_not_cluttered": 0.11031746031746031,
+        "usefulness_for_decision_making": 0.12222222222222223,
+        "clarity_readability_formatting": 0.13571428571428573
+      },
+      "top_preferences": {
+        "unacceptable_error": {
+          "Containing incorrect information": 28,
+          "Missing Critical Information": 21,
+          "Excessive length or clutter that makes key points hard to find": 12,
+          "Being too vague or generic to be useful": 6,
+          "Other": 3
+        },
+        "preferred_format": {
+          "Hybrid": 37,
+          "Bullet Points": 20,
+          "Narrative Paragraphs": 10,
+          "Other": 3
+        },
+        "role_customization_importance": {
+          "Very important": 42,
+          "Somewhat important": 27,
+          "Not important": 1
+        },
+        "preferred_length": {
+          "Balanced": 50,
+          "Brevity": 14,
+          "Comprehensive": 6
+        },
+        "interpretation_preference": {
+          "Some interpretation": 29,
+          "Interpretation only when needed": 25,
+          "No interpretation": 12,
+          "Substantial interpretation": 4
+        },
+        "critical_findings_presentation": {
+          "Clearly highlighted at the very top": 37,
+          "Highlighted in context within the body": 19,
+          "Depends on severity": 12,
+          "No special highlighting needed": 2
+        },
+        "verifiability_importance": {
+          "Important": 36,
+          "Critically important": 18,
+          "Somewhat important": 15,
+          "Not important": 1
+        }
+      }
+    }
+  }
+}

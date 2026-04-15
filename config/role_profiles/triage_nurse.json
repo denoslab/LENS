@@ -1,18 +1,19 @@
 {
   "role_id": "triage_nurse",
-  "clinical_objective": "Enable fast acuity sorting and immediate prioritization decisions.",
-  "evaluation_style": "Signal-first and speed-first; penalize verbosity and low-actionability.",
+  "clinical_objective": "Enable rapid acuity sorting, risk recognition, and safe initial prioritization decisions.",
+  "evaluation_style": "Signal-first and acuity-first; fast scanning matters, but a short summary without current risk cues is unsafe and should not score highly.",
   "primary_questions": [
-    "Can I quickly identify how sick the patient may be right now?",
-    "Does the summary foreground what changed recently and why it matters now?",
-    "Can this support safe and rapid triage prioritization?"
+    "Can a triage nurse identify what is happening now, how urgent it may be, and why it matters from a quick scan?",
+    "Does the summary preserve current symptoms, recent change, worsening pattern, and timing strongly enough to support triage prioritization?",
+    "Would a nurse assigning acuity need to make unsafe assumptions because key risk cues were shortened away?"
   ],
   "high_priority_dimensions": [
-    "usefulness_for_decision_making",
     "recent_changes_highlighted",
+    "usefulness_for_decision_making",
     "timeline_evolution",
+    "clarity_readability_formatting",
     "focused_not_cluttered",
-    "clarity_readability_formatting"
+    "factual_accuracy"
   ],
   "lower_priority_dimensions": [
     "relevant_chronic_problem_coverage",
@@ -20,32 +21,65 @@
   ],
   "must_have_signals": [
     {
-      "signal": "Immediate acuity cues such as worsening pattern, instability clues, or current risk context",
-      "dimensions": ["usefulness_for_decision_making", "timeline_evolution"],
+      "signal": "Current acuity cues such as worsening pattern, instability context, symptom escalation, or immediate risk framing",
+      "dimensions": [
+        "usefulness_for_decision_making",
+        "timeline_evolution"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Clear statements of recent change and timing",
-      "dimensions": ["recent_changes_highlighted"],
+      "signal": "Clear statements of what changed recently and when it changed",
+      "dimensions": [
+        "recent_changes_highlighted",
+        "timeline_evolution"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Concise and scan-friendly structure for busy triage workflow",
-      "dimensions": ["focused_not_cluttered", "clarity_readability_formatting"],
+      "signal": "Scan-friendly structure that still preserves triage-critical content instead of becoming concise through omission",
+      "dimensions": [
+        "focused_not_cluttered",
+        "clarity_readability_formatting"
+      ],
       "if_missing_max_score": 3
     }
   ],
   "strict_downgrade_rules": [
     {
-      "condition": "Long historical detail dominates current risk framing",
-      "dimensions": ["focused_not_cluttered", "usefulness_for_decision_making"],
+      "condition": "The summary is brief but removes timing, symptom escalation, or other details needed to judge current acuity",
+      "dimensions": [
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "usefulness_for_decision_making"
+      ],
       "penalty_points": 1
     },
     {
-      "condition": "Important signals are present but hard to scan quickly",
-      "dimensions": ["clarity_readability_formatting"],
+      "condition": "Current risk framing is weak because the summary compresses important details into vague generic language",
+      "dimensions": [
+        "factual_accuracy",
+        "usefulness_for_decision_making"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "The summary is easy to scan only because triage-relevant detail has been removed",
+      "dimensions": [
+        "clarity_readability_formatting",
+        "focused_not_cluttered"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "Long background history remains but immediate triage implications are still hard to locate",
+      "dimensions": [
+        "focused_not_cluttered",
+        "clarity_readability_formatting",
+        "usefulness_for_decision_making"
+      ],
       "penalty_points": 1
     }
   ],
-  "tie_breaker_guidance": "Bias toward lower score unless triage-critical evidence is explicit and easy to find."
+  "tie_breaker_guidance": "If a summary is concise but omits acuity-critical detail, choose the lower score."
 }

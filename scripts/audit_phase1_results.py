@@ -21,8 +21,7 @@ from scripts.run_cli_sensitivity_experiment import (  # noqa: E402
     parse_bad_summaries,
 )
 
-RESULTS_ROOT = REPO_ROOT / "reports"
-DEFAULT_OUTDIR = REPO_ROOT / "reports" / "phase1_audit"
+RESULTS_ROOT = REPO_ROOT / "reports" / "phase1"
 ROLE_NAMES = ["Physician", "Triage Nurse", "Bedside Nurse"]
 DIMENSION_LABELS = {
     "factual_accuracy": "Factual Accuracy",
@@ -135,7 +134,7 @@ def _shorten_bullets(items: list[str], max_items: int = 2, max_len: int = 80) ->
 
 def detect_results_dir(reports_root: Path) -> ResultsSelection:
     candidates: list[ResultsSelection] = []
-    for child in reports_root.iterdir():
+    for child in reports_root.glob("*/run"):
         if not child.is_dir():
             continue
         good_dir = child / "outputs" / "good"
@@ -146,8 +145,9 @@ def detect_results_dir(reports_root: Path) -> ResultsSelection:
         bad_count = len(list(bad_dir.glob("source_*.json")))
         has_report = (child / "report.md").is_file()
         has_summary = (child / "summary.csv").is_file()
+        label = child.parent.name
         selection_note = (
-            f"candidate={child.name}, good_json={good_count}, bad_json={bad_count}, "
+            f"candidate={label}/run, good_json={good_count}, bad_json={bad_count}, "
             f"report={'yes' if has_report else 'no'}, summary={'yes' if has_summary else 'no'}"
         )
         candidates.append(
@@ -162,7 +162,7 @@ def detect_results_dir(reports_root: Path) -> ResultsSelection:
         )
     if not candidates:
         raise FileNotFoundError(
-            f"No Phase 1 result directory found under {reports_root}. Expected a folder with outputs/good and outputs/bad."
+            f"No Phase 1 result directory found under {reports_root}. Expected folders like reports/phase1/<label>/run with outputs/good and outputs/bad."
         )
     candidates.sort(
         key=lambda item: (
@@ -541,6 +541,7 @@ def write_audit_report(
     selected_results: ResultsSelection,
     pair_audits: list[PairAudit],
     missing_messages: list[str],
+    bad_file: Path,
 ) -> Path:
     aggregate = _aggregate_summary(pair_audits)
     valid_pairs = aggregate["valid_pairs"]
@@ -551,7 +552,7 @@ def write_audit_report(
         "## 1. Overview",
         f"- Result folder used: `{selected_results.path}`",
         f"- Selection note: {selected_results.selection_note}",
-        f"- Bad annotation file: `{DEFAULT_BAD_FILE}`",
+        f"- Bad annotation file: `{bad_file}`",
         f"- Good output directory: `{selected_results.path / 'outputs' / 'good'}`",
         f"- Bad output directory: `{selected_results.path / 'outputs' / 'bad'}`",
         f"- Good/bad pairs successfully audited: `{len(valid_pairs)}`",
@@ -736,29 +737,37 @@ def main() -> int:
     parser.add_argument(
         "--outdir",
         type=Path,
-        default=DEFAULT_OUTDIR,
-        help="Directory for the audit markdown report and CSV summary.",
+        default=None,
+        help="Directory for the audit markdown report and CSV summary. Defaults to a sibling audit/ folder next to the selected run/ directory.",
     )
     args = parser.parse_args()
 
     if args.results_dir is None:
         selected_results = detect_results_dir(RESULTS_ROOT)
     else:
+        explicit_results_dir = args.results_dir if args.results_dir.is_absolute() else (REPO_ROOT / args.results_dir)
         selected_results = ResultsSelection(
-            path=args.results_dir,
-            good_count=len(list((args.results_dir / "outputs" / "good").glob("source_*.json"))),
-            bad_count=len(list((args.results_dir / "outputs" / "bad").glob("source_*.json"))),
-            has_report=(args.results_dir / "report.md").is_file(),
-            has_summary=(args.results_dir / "summary.csv").is_file(),
+            path=explicit_results_dir,
+            good_count=len(list((explicit_results_dir / "outputs" / "good").glob("source_*.json"))),
+            bad_count=len(list((explicit_results_dir / "outputs" / "bad").glob("source_*.json"))),
+            has_report=(explicit_results_dir / "report.md").is_file(),
+            has_summary=(explicit_results_dir / "summary.csv").is_file(),
             selection_note="Assumption: result folder was provided explicitly by the user.",
         )
 
-    annotations = parse_bad_annotations(args.bad_file)
+    bad_file = args.bad_file if args.bad_file.is_absolute() else (REPO_ROOT / args.bad_file)
+    outdir = args.outdir
+    if outdir is None:
+        outdir = selected_results.path.parent / "audit"
+    elif not outdir.is_absolute():
+        outdir = REPO_ROOT / outdir
+
+    annotations = parse_bad_annotations(bad_file)
     good_outputs = load_outputs(selected_results.path / "outputs" / "good")
     bad_outputs = load_outputs(selected_results.path / "outputs" / "bad")
     pair_audits, missing_messages = audit_pairs(annotations, good_outputs, bad_outputs)
-    report_path = write_audit_report(args.outdir, selected_results, pair_audits, missing_messages)
-    csv_path = write_summary_csv(args.outdir, pair_audits)
+    report_path = write_audit_report(outdir, selected_results, pair_audits, missing_messages, bad_file)
+    csv_path = write_summary_csv(outdir, pair_audits)
     print(f"Audit report written to: {report_path}")
     print(f"CSV summary written to: {csv_path}")
     return 0

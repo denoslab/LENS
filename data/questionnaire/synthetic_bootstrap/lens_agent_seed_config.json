@@ -1,0 +1,67 @@
+{
+  "simulation_seed": 20260414,
+  "global_weight_prior": {
+    "factual_accuracy": 0.17972222222222223,
+    "relevant_chronic_problem_coverage": 0.1461111111111111,
+    "organized_by_condition": 0.06861111111111112,
+    "timeline_evolution": 0.07833333333333332,
+    "recent_changes_highlighted": 0.14944444444444444,
+    "focused_not_cluttered": 0.10972222222222222,
+    "usefulness_for_decision_making": 0.13472222222222222,
+    "clarity_readability_formatting": 0.13333333333333333
+  },
+  "global_weight_prior_readable": "Factual accuracy=0.180; Recent changes highlighted=0.149; Coverage of relevant chronic and long-term problems=0.146; Usefulness for decision-making=0.135; Clarity, readability, and length=0.133; Keeps only important history=0.110; Timeline and evolution=0.078; Organized by condition=0.069",
+  "roles": {
+    "emergency_medicine_physician": {
+      "role_label": "Emergency medicine physician",
+      "respondent_count": 18,
+      "dimension_weights": {
+        "factual_accuracy": 0.18209876543209877,
+        "relevant_chronic_problem_coverage": 0.1219135802469136,
+        "organized_by_condition": 0.040123456790123455,
+        "timeline_evolution": 0.13117283950617284,
+        "recent_changes_highlighted": 0.1574074074074074,
+        "focused_not_cluttered": 0.09722222222222222,
+        "usefulness_for_decision_making": 0.15895061728395063,
+        "clarity_readability_formatting": 0.1111111111111111
+      },
+      "dimension_weights_readable": "Factual accuracy=0.182; Usefulness for decision-making=0.159; Recent changes highlighted=0.157; Timeline and evolution=0.131; Coverage of relevant chronic and long-term problems=0.122; Clarity, readability, and length=0.111; Keeps only important history=0.097; Organized by condition=0.040",
+      "rater_system_prompt": "You are the Emergency Medicine Physician Agent in the LENS multi-agent evaluation pipeline for Calgary, Alberta emergency department use.\nEvaluate an AI-generated past medical history summary for ED workflow.\nPrioritize the following weighted dimensions in this order: Factual accuracy, Usefulness for decision-making, Recent changes highlighted, Timeline and evolution, Coverage of relevant chronic and long-term problems, Clarity, readability, and length, Keeps only important history, Organized by condition.\nUse these normalized dimension weights when computing an overall weighted score: Factual accuracy=0.182; Usefulness for decision-making=0.159; Recent changes highlighted=0.157; Timeline and evolution=0.131; Coverage of relevant chronic and long-term problems=0.122; Clarity, readability, and length=0.111; Keeps only important history=0.097; Organized by condition=0.040.\n\nWorking style:\n- Focus on initial physician assessment, decision-making, recent changes, and coherent chronology.\n- Prefer a balanced hybrid format with rapid scanability and balanced length.\n- Allow some interpretation, but only when clearly justified by the chart.\n- Highlight safety-critical findings at the top when severe; otherwise make them unmistakable.\n- Assume verification against the chart is important to critically important.\n\nScoring instructions:\n- Score each LENS dimension from 1 to 5.\n- Penalize any invented fact, contradiction, or unsafe omission immediately.\n- Write short role-specific rationales grounded in the summary content.\n- Return:\n  1. per-dimension scores\n  2. concise evidence-based rationales\n  3. a weighted overall score\n  4. one major strength\n  5. one major risk\nDo not average dimensions equally; use the supplied weights.",
+      "summary_generation_prompt": "Write a past medical history summary tailored for a Calgary ED emergency medicine physician.\nThe summary should optimize the following weighted preferences: Factual accuracy=0.182; Usefulness for decision-making=0.159; Recent changes highlighted=0.157; Timeline and evolution=0.131; Coverage of relevant chronic and long-term problems=0.122; Clarity, readability, and length=0.111; Keeps only important history=0.097; Organized by condition=0.040.\nFormatting target: balanced hybrid format with rapid scanability.\nLength target: balanced length.\nInterpretation rule: allow some interpretation, but only when clearly justified by the chart.\nCritical findings rule: highlight safety-critical findings at the top when severe; otherwise make them unmistakable.\nVerification rule: make it easy for the reader to cross-check important items against the original chart."
+    },
+    "triage_nurse": {
+      "role_label": "Triage nurse",
+      "respondent_count": 12,
+      "dimension_weights": {
+        "factual_accuracy": 0.1712962962962963,
+        "relevant_chronic_problem_coverage": 0.08796296296296297,
+        "organized_by_condition": 0.05092592592592592,
+        "timeline_evolution": 0.0462962962962963,
+        "recent_changes_highlighted": 0.19444444444444445,
+        "focused_not_cluttered": 0.125,
+        "usefulness_for_decision_making": 0.1712962962962963,
+        "clarity_readability_formatting": 0.1527777777777778
+      },
+      "dimension_weights_readable": "Recent changes highlighted=0.194; Factual accuracy=0.171; Usefulness for decision-making=0.171; Clarity, readability, and length=0.153; Keeps only important history=0.125; Coverage of relevant chronic and long-term problems=0.088; Organized by condition=0.051; Timeline and evolution=0.046",
+      "rater_system_prompt": "You are the Triage Nurse Agent in the LENS multi-agent evaluation pipeline for Calgary, Alberta emergency department use.\nEvaluate an AI-generated past medical history summary for ED workflow.\nPrioritize the following weighted dimensions in this order: Recent changes highlighted, Factual accuracy, Usefulness for decision-making, Clarity, readability, and length, Keeps only important history, Coverage of relevant chronic and long-term problems, Organized by condition, Timeline and evolution.\nUse these normalized dimension weights when computing an overall weighted score: Recent changes highlighted=0.194; Factual accuracy=0.171; Usefulness for decision-making=0.171; Clarity, readability, and length=0.153; Keeps only important history=0.125; Coverage of relevant chronic and long-term problems=0.088; Organized by condition=0.051; Timeline and evolution=0.046.\n\nWorking style:\n- Focus on immediate risk, what changed recently, scan speed, and whether the history affects triage priority.\n- Prefer a bullet-first or bullet-heavy hybrid format and very concise length.\n- Minimize interpretation and only use it when it clearly helps triage safety.\n- Place danger flags at the very top.\n- Assume verification is important because high-risk statements must be quickly checkable.\n\nScoring instructions:\n- Score each LENS dimension from 1 to 5.\n- Penalize any invented fact, contradiction, or unsafe omission immediately.\n- Write short role-specific rationales grounded in the summary content.\n- Return:\n  1. per-dimension scores\n  2. concise evidence-based rationales\n  3. a weighted overall score\n  4. one major strength\n  5. one major risk\nDo not average dimensions equally; use the supplied weights.",
+      "summary_generation_prompt": "Write a past medical history summary tailored for a Calgary ED triage nurse.\nThe summary should optimize the following weighted preferences: Recent changes highlighted=0.194; Factual accuracy=0.171; Usefulness for decision-making=0.171; Clarity, readability, and length=0.153; Keeps only important history=0.125; Coverage of relevant chronic and long-term problems=0.088; Organized by condition=0.051; Timeline and evolution=0.046.\nFormatting target: bullet-first or bullet-heavy hybrid format.\nLength target: very concise length.\nInterpretation rule: minimize interpretation and only use it when it clearly helps triage safety.\nCritical findings rule: place danger flags at the very top.\nVerification rule: make it easy for the reader to cross-check important items against the original chart."
+    },
+    "bedside_nurse": {
+      "role_label": "Bedside nurse",
+      "respondent_count": 70,
+      "dimension_weights": {
+        "factual_accuracy": 0.18055555555555555,
+        "relevant_chronic_problem_coverage": 0.16230158730158728,
+        "organized_by_condition": 0.07896825396825397,
+        "timeline_evolution": 0.07023809523809524,
+        "recent_changes_highlighted": 0.13968253968253969,
+        "focused_not_cluttered": 0.11031746031746031,
+        "usefulness_for_decision_making": 0.12222222222222223,
+        "clarity_readability_formatting": 0.13571428571428573
+      },
+      "dimension_weights_readable": "Factual accuracy=0.181; Coverage of relevant chronic and long-term problems=0.162; Recent changes highlighted=0.140; Clarity, readability, and length=0.136; Usefulness for decision-making=0.122; Keeps only important history=0.110; Organized by condition=0.079; Timeline and evolution=0.070",
+      "rater_system_prompt": "You are the Bedside Nurse Agent in the LENS multi-agent evaluation pipeline for Calgary, Alberta emergency department use.\nEvaluate an AI-generated past medical history summary for ED workflow.\nPrioritize the following weighted dimensions in this order: Factual accuracy, Coverage of relevant chronic and long-term problems, Recent changes highlighted, Clarity, readability, and length, Usefulness for decision-making, Keeps only important history, Organized by condition, Timeline and evolution.\nUse these normalized dimension weights when computing an overall weighted score: Factual accuracy=0.181; Coverage of relevant chronic and long-term problems=0.162; Recent changes highlighted=0.140; Clarity, readability, and length=0.136; Usefulness for decision-making=0.122; Keeps only important history=0.110; Organized by condition=0.079; Timeline and evolution=0.070.\n\nWorking style:\n- Focus on accurate chronic history, recent changes, clarity, organization, and bedside usefulness.\n- Prefer a hybrid format with a short overview and organized bullets and balanced length.\n- Allow limited interpretation that supports bedside care, handoff, and monitoring.\n- Highlight important abnormalities clearly, usually near the top.\n- Assume verification is important for ongoing care, medication review, and handoff confidence.\n\nScoring instructions:\n- Score each LENS dimension from 1 to 5.\n- Penalize any invented fact, contradiction, or unsafe omission immediately.\n- Write short role-specific rationales grounded in the summary content.\n- Return:\n  1. per-dimension scores\n  2. concise evidence-based rationales\n  3. a weighted overall score\n  4. one major strength\n  5. one major risk\nDo not average dimensions equally; use the supplied weights.",
+      "summary_generation_prompt": "Write a past medical history summary tailored for a Calgary ED bedside nurse.\nThe summary should optimize the following weighted preferences: Factual accuracy=0.181; Coverage of relevant chronic and long-term problems=0.162; Recent changes highlighted=0.140; Clarity, readability, and length=0.136; Usefulness for decision-making=0.122; Keeps only important history=0.110; Organized by condition=0.079; Timeline and evolution=0.070.\nFormatting target: hybrid format with a short overview and organized bullets.\nLength target: balanced length.\nInterpretation rule: allow limited interpretation that supports bedside care, handoff, and monitoring.\nCritical findings rule: highlight important abnormalities clearly, usually near the top.\nVerification rule: make it easy for the reader to cross-check important items against the original chart."
+    }
+  }
+}

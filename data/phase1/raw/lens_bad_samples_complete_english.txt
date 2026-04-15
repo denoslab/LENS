@@ -1,0 +1,373 @@
+LENS BAD SAMPLE TEST SET
+Source file: MTS-Dialog-ValidationSet_top10_longest_section_texts.txt
+Purpose: Deliberately degraded summary samples for grading-pipeline sensitivity testing.
+Language: English only
+
+======================================================================
+BAD SAMPLE 1
+Source ID: 14
+Section Header: GENHX
+Badness Type: Omission-heavy + contradiction + vagueness
+
+BAD SUMMARY
+The patient is a 62-year-old man with long-standing discomfort in the legs and hands. He reports numbness and pain that have been bothering him for some time. He also mentions poor sleep and trouble walking. He has a history of heart disease and diabetes but is otherwise relatively stable. Pain medication provides some relief. Overall, this appears to be chronic neuropathy without any major recent change.
+
+WHAT I REMOVED
+- Hypertension.
+- Prior stroke in 2002 with minimal residual right-sided weakness.
+- Two prior myocardial infarctions.
+- Pacemaker insertion.
+- The fact that symptoms began in 2001 and have progressively worsened.
+- Burning pain, clumsiness, and reduced sensation in the hands.
+- The recent six-month worsening, including inability to feel hot objects and dropping items.
+- Muscle jerks in both hands and shoulders.
+- Failed gabapentin trial.
+- The detail that oxycodone helps for about three hours.
+- The transfer to a nursing facility after a recent MI and pacemaker insertion.
+- The fact that insulin was stopped and the patient has only been on oral diabetes medication since then.
+- The explicit negatives about back pain, neck pain, bowel or bladder changes, and injury.
+
+WHAT I REPLACED
+- Replaced the detailed neurologic history with the vague phrase "discomfort in the legs and hands."
+- Replaced a long progressive timeline with "for some time."
+- Replaced gait instability requiring a walker with the weaker phrase "trouble walking."
+- Replaced multiple specific cardiovascular events with the generic phrase "history of heart disease."
+
+WHAT I CHANGED
+- Added "otherwise relatively stable," which is not supported by the source.
+- Added "without any major recent change," which conflicts with the recent six-month worsening described in the source.
+- Removed condition-based organization and most temporal structure.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- relevant_chronic_problem_coverage
+- timeline_evolution
+- recent_changes_highlighted
+- usefulness_for_decision_making
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 2
+Source ID: 62
+Section Header: GENHX
+Badness Type: Timeline weakening + omission-heavy + under-calling severity
+
+BAD SUMMARY
+The patient returns for follow-up of chronic neck discomfort and intermittent arm symptoms. Physical therapy has been helping, and she mainly reports pain with mild hand weakness. Her symptoms seem fairly stable overall. She denies major functional limitation and there are no significant new concerns. The current plan is to continue conservative treatment.
+
+WHAT I REMOVED
+- The diagnosis context of cervical spinal stenosis.
+- The prior visit date of 06/19/07.
+- The exacerbation after lifting objects on 06/04/07.
+- The right-greater-than-left upper extremity pain, weakness, and paresthesias.
+- The MRI referral.
+- The radiation of symptoms from the neck.
+- The detail that right hand weakness continues.
+- The specific functional impairments such as difficulty opening jars and doors and dropping items.
+- The nighttime sharp shooting radicular pain and weakness down the left upper extremity.
+- The statement that these symptoms are frightening to the patient.
+- The fact that nonoperative management helps neck pain but not upper extremity symptoms.
+
+WHAT I REPLACED
+- Replaced "cervical spinal stenosis" with the weaker phrase "chronic neck discomfort."
+- Replaced bilateral but asymmetric neurologic symptoms with the vague phrase "intermittent arm symptoms."
+- Replaced ongoing weakness and paresthesias with "mild hand weakness."
+
+WHAT I CHANGED
+- Added "symptoms seem fairly stable overall," which downplays ongoing worsening and persistent deficits.
+- Added "denies major functional limitation," which conflicts with dropping objects and difficulty opening jars and doors.
+- Converted a clinically concerning neurologic follow-up into a routine conservative management summary.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- relevant_chronic_problem_coverage
+- timeline_evolution
+- recent_changes_highlighted
+- usefulness_for_decision_making
+
+======================================================================
+BAD SAMPLE 3
+Source ID: 37
+Section Header: GENHX
+Badness Type: Contradiction + omission-heavy + false reassurance
+
+BAD SUMMARY
+The patient returns after a recent kidney stone admission and is recovering well. She completed her hospital treatment and understands the follow-up plan. Her medications were reviewed and she has been taking them correctly. She has only mild residual symptoms and no major concerns today. She will continue routine outpatient follow-up.
+
+WHAT I REMOVED
+- Sepsis from nephrolithiasis.
+- Left ureteral stent placement.
+- Lithotripsy for the stone.
+- The fact that written medication and follow-up instructions were lost.
+- The missing follow-up appointment with the specialist.
+- The family's report that prescriptions and instructions were lost after discharge.
+- The likely antibiotic name and the detail that one dose remained.
+- The patient's statement that she still does not feel well.
+- The patient's lack of awareness that a ureteral stent is still in place.
+- The repeated explanation given to her and her husband.
+
+WHAT I REPLACED
+- Replaced a complicated, unsafe post-discharge course with the generic phrase "recovering well."
+- Replaced confusion about follow-up with "understands the follow-up plan."
+- Replaced ongoing illness and uncertainty with "only mild residual symptoms."
+
+WHAT I CHANGED
+- Added "no major concerns today," which is unsupported by the source.
+- Framed the case as routine follow-up instead of a poorly understood and potentially risky post-hospital situation.
+- Removed nearly all recent interventions and safety-relevant details.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- recent_changes_highlighted
+- usefulness_for_decision_making
+- relevant_chronic_problem_coverage
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 4
+Source ID: 0
+Section Header: GENHX
+Badness Type: Timeline distortion + omission-heavy
+
+BAD SUMMARY
+The patient is a 26-year-old woman with low back pain after a recent minor fall. She has had occasional back discomfort in the past but was functioning well until this new event. Her symptoms are likely due to an acute flare. She previously had limited treatment and is now being reassessed. Follow-up has been arranged.
+
+WHAT I REMOVED
+- The original traumatic low back injury occurred eight years earlier.
+- Continuous low-back pain at varying levels for the full eight-year period.
+- The earlier physical therapy details, including electrical stimulation and heat.
+- The worsening after childbirth in August 2008.
+- The detail that the new fall happened four to five days ago while mopping and that she landed on her tailbone.
+- The exact physician evaluation date and follow-up date.
+
+WHAT I REPLACED
+- Replaced a long chronic pain history with "occasional back discomfort in the past."
+- Replaced the combination of chronic pain plus recent worsening with a mostly acute narrative.
+- Replaced the mechanism of the recent fall with the vague phrase "recent minor fall."
+
+WHAT I CHANGED
+- Added "was functioning well until this new event," which is inconsistent with the source's eight years of continuous pain.
+- Shifted the summary away from chronic evolution and toward an isolated acute flare.
+- Removed important temporal anchors.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- relevant_chronic_problem_coverage
+- timeline_evolution
+- recent_changes_highlighted
+- usefulness_for_decision_making
+
+======================================================================
+BAD SAMPLE 5
+Source ID: 9
+Section Header: GENHX
+Badness Type: Under-specification + omission-heavy + poor organization
+
+BAD SUMMARY
+The patient is a 57-year-old woman with foot pain related to bunions. She previously had surgery and has noticed some return of symptoms over time. Pain is worse on the right, and she has discomfort with standing at work. Orthotics provide partial relief. Overall, this is a chronic foot pain issue without much additional complexity.
+
+WHAT I REMOVED
+- Recurrent bunion deformity in both feet, right greater than left.
+- Pain specifically at the second toe and MTP joint of the right foot.
+- Prior surgery approximately 13 years ago.
+- The progressive deformity in the lesser toes, including the second and third toes of the left foot and the second toe of the right foot.
+- The fact that the patient works on her feet as a hospital employee.
+
+WHAT I REPLACED
+- Replaced "recurrent bunion deformity in bilateral feet" with the less precise phrase "foot pain related to bunions."
+- Replaced the detailed toe deformity distribution with "some return of symptoms over time."
+- Replaced occupational standing demands with the simpler phrase "standing at work."
+
+WHAT I CHANGED
+- Added "without much additional complexity," which downplays the structural recurrence and progression.
+- Reduced an anatomic and functional foot summary into a generic pain complaint.
+- Removed problem-based organization that would help a clinician quickly understand the forefoot issues.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- relevant_chronic_problem_coverage
+- organized_by_condition
+- timeline_evolution
+- usefulness_for_decision_making
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 6
+Source ID: 59
+Section Header: GENHX
+Badness Type: Contradiction + omission-heavy
+
+BAD SUMMARY
+This is a 53-year-old man presenting mainly for hernia pain and mild gastrointestinal upset. His leg symptoms have resolved and are no longer important. He has a limited past medical history and is not currently anticoagulated. Overall, this appears to be an uncomplicated abdominal complaint.
+
+WHAT I REMOVED
+- The question of blood in the stool.
+- Nausea and vomiting.
+- Left lower extremity pain and previous paresthesias.
+- Atrial fibrillation.
+- Coumadin use and the fact that it is currently subtherapeutic.
+- Multiple prior cerebrovascular accidents.
+- Peripheral vascular disease.
+- Congestive heart failure.
+- Multiple episodes of previous ischemia of the large bowel.
+
+WHAT I REPLACED
+- Replaced multiple complaints with the narrower phrase "mainly for hernia pain and mild gastrointestinal upset."
+- Replaced improved but still clinically relevant leg symptoms with "resolved and are no longer important."
+- Replaced a very high-risk vascular and cardiac history with "limited past medical history."
+
+WHAT I CHANGED
+- Added "is not currently anticoagulated," which directly conflicts with the source stating he is on Coumadin.
+- Added "uncomplicated abdominal complaint," which ignores substantial vascular and cardiac risk.
+- Downplayed the seriousness of the presentation and comorbidities.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- relevant_chronic_problem_coverage
+- usefulness_for_decision_making
+- focused_not_cluttered
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 7
+Source ID: 81
+Section Header: GENHX
+Badness Type: Vagueness + omission-heavy + loss of structural detail
+
+BAD SUMMARY
+This is a 58-year-old woman with chronic right knee pain that did not respond well to prior treatment. She previously had surgery and has progressive arthritis. Examination before surgery showed degenerative change in the knee. She is now being managed for advanced joint disease.
+
+WHAT I REMOVED
+- The pain had been increasing for years prior to surgical intervention.
+- The patient was completely refractory to conservative outpatient therapy.
+- She had undergone two prior knee arthroscopies.
+- The deformity was a collapsing-type valgus degenerative osteoarthritis.
+- Complete collapse and wear of the lateral compartment.
+- Degenerative changes in the femoral sulcus.
+- Minor changes in the medial compartment.
+- No contracture of the lateral collateral ligament.
+- Mild laxity on both sides.
+- No significant preoperative flexion contracture.
+
+WHAT I REPLACED
+- Replaced the detailed arthritic pattern with the generic phrase "progressive arthritis."
+- Replaced the structural exam findings with "degenerative change in the knee."
+- Replaced prior operative history with the simpler phrase "previously had surgery."
+
+WHAT I CHANGED
+- Flattened a surgically rich orthopedic description into a generic degenerative knee summary.
+- Removed laterality-specific compartment details and ligament findings.
+- Reduced the anatomic usefulness of the note.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- relevant_chronic_problem_coverage
+- organized_by_condition
+- usefulness_for_decision_making
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 8
+Source ID: 43
+Section Header: GENHX
+Badness Type: Contradiction + exaggeration + omission-heavy
+
+BAD SUMMARY
+This is a 29-year-old man presenting after a wasp sting with concern for a severe allergic reaction. He has had anaphylaxis in the past with throat tightness and shortness of breath, and he feels this episode is similar. He reports generalized symptoms rather than a localized reaction. The main concern today is progression toward systemic allergy.
+
+WHAT I REMOVED
+- Prior similar sting reactions were localized swelling.
+- The reason he came in early was to avoid a severe reaction.
+- The source explicitly states there was no prior anaphylaxis-type reaction.
+- The source explicitly states there was no shortness of breath, no throat closing sensation, no racing heartbeat, and no anxiety feeling.
+- The reaction was described as a lot of localized swelling in the right hand and arm.
+
+WHAT I REPLACED
+- Replaced localized swelling with "generalized symptoms."
+- Replaced prior non-anaphylactic reactions with a false severe allergy history.
+- Replaced precautionary evaluation with concern for active systemic progression.
+
+WHAT I CHANGED
+- Added prior anaphylaxis, throat tightness, and shortness of breath, all of which contradict the source.
+- Reframed the episode as a systemic allergic reaction rather than a localized swelling reaction.
+- Removed reassuring negatives that are important for triage and decision-making.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- recent_changes_highlighted
+- usefulness_for_decision_making
+- focused_not_cluttered
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 9
+Source ID: 53
+Section Header: GENHX
+Badness Type: Contradiction + omission-heavy + noise insertion
+
+BAD SUMMARY
+This is a 49-year-old woman with atopic dermatitis who presents with fever, sore throat, cough, and bilateral ear pain for several days. Her hearing has been getting worse. She likely has an acute respiratory infection, and her skin medication issue is unrelated. She denies any sinus or jaw symptoms.
+
+WHAT I REMOVED
+- Left otalgia and headache as the presenting issue.
+- Three-week symptom duration.
+- Hearing difficulty had greatly improved.
+- Left-sided sinus pressure.
+- Dental pain with normal dental evaluation.
+- Ongoing left-sided jaw pain.
+- Prior sinusitis and chronic left-sided headache.
+- The request for a refill of Cutivate cream.
+
+WHAT I REPLACED
+- Replaced unilateral ear pain with "bilateral ear pain."
+- Replaced improving hearing with "hearing has been getting worse."
+- Replaced sinus and jaw symptoms with a false respiratory infection picture.
+
+WHAT I CHANGED
+- Added fever, sore throat, and cough, which are explicitly denied in the source.
+- Added "denies any sinus or jaw symptoms," which directly contradicts the source.
+- Shifted a mixed ENT/sinus/jaw complaint into a generic respiratory illness narrative.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- relevant_chronic_problem_coverage
+- timeline_evolution
+- usefulness_for_decision_making
+- clarity_readability_formatting
+
+======================================================================
+BAD SAMPLE 10
+Source ID: 18
+Section Header: GENHX
+Badness Type: Direct contradiction + medication-link removal
+
+BAD SUMMARY
+The patient presents with recurrent vertigo that feels like the room is spinning. Symptoms occur randomly and are unrelated to position changes. Lorazepam has been helpful. He denies weakness or shakiness. His blood pressure medication changes do not seem related. This is likely the same as his prior vertigo and there has been no meaningful worsening.
+
+WHAT I REMOVED
+- The patient denied a spinning sensation and distinguished this from prior vertigo.
+- Symptoms usually occur with standing up from sitting or lying down.
+- Sitting down helps, but symptoms do not fully resolve for 15 to 30 minutes.
+- He feels shaky and weak all over during episodes.
+- His blood pressure has been up lately.
+- Metoprolol was increased.
+- Symptoms have gotten worse since the metoprolol increase.
+
+WHAT I REPLACED
+- Replaced position-related lightheadedness with "recurrent vertigo."
+- Replaced a non-spinning sensation with the classic spinning-room description.
+- Replaced lorazepam ineffectiveness with a false positive response.
+- Replaced the medication-related temporal link with "do not seem related."
+
+WHAT I CHANGED
+- Added "there has been no meaningful worsening," which conflicts with the source.
+- Reframed a potentially orthostatic or medication-related complaint as a recurrence of prior vertigo.
+- Removed the strongest temporal and decision-relevant clues.
+
+EXPECTED LOW-SCORING DIMENSIONS
+- factual_accuracy
+- timeline_evolution
+- recent_changes_highlighted
+- usefulness_for_decision_making
+- clarity_readability_formatting
+
+======================================================================
+END OF FILE

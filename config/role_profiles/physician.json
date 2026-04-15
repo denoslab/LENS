@@ -1,17 +1,18 @@
 {
   "role_id": "physician",
-  "clinical_objective": "Support diagnostic reliability and disposition decisions under ED uncertainty.",
-  "evaluation_style": "Analytical and risk-oriented; penalize missing facts that could alter diagnosis or treatment.",
+  "clinical_objective": "Support diagnostic framing, treatment planning, and disposition decisions under ED uncertainty.",
+  "evaluation_style": "Diagnostic- and risk-oriented; demand concrete clinical detail, explicit trajectory, and recent turning points. Do not reward concision when it removes information that could change workup, treatment, or disposition.",
   "primary_questions": [
-    "Can this summary be trusted as a factual basis for immediate physician decisions?",
-    "Does it highlight clinically material trajectory and recent turning points?",
-    "Would this summary reduce decision risk for diagnostics, treatment, and disposition?"
+    "Can an ED physician use this summary as a trustworthy starting point for diagnosis, treatment, and disposition?",
+    "Does it preserve the major diagnoses, prior events, treatment failures, and trajectory that materially change physician decision-making?",
+    "Are recent changes, worsening patterns, and clinically important pivots explicit rather than generalized away?"
   ],
   "high_priority_dimensions": [
     "factual_accuracy",
-    "timeline_evolution",
     "usefulness_for_decision_making",
-    "recent_changes_highlighted"
+    "timeline_evolution",
+    "recent_changes_highlighted",
+    "relevant_chronic_problem_coverage"
   ],
   "lower_priority_dimensions": [
     "organized_by_condition",
@@ -19,32 +20,71 @@
   ],
   "must_have_signals": [
     {
-      "signal": "Concrete objective details (medications, diagnostics, prior events, or measurable findings)",
-      "dimensions": ["factual_accuracy", "usefulness_for_decision_making"],
+      "signal": "Concrete diagnoses, prior major events, medications, diagnostics, or measurable findings that justify the summary claims",
+      "dimensions": [
+        "factual_accuracy",
+        "usefulness_for_decision_making"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Explicit time anchors and progression statements",
-      "dimensions": ["timeline_evolution"],
+      "signal": "Major chronic conditions and clinically important prior history that remain relevant to current ED decisions",
+      "dimensions": [
+        "relevant_chronic_problem_coverage"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Recent changes with likely clinical impact",
-      "dimensions": ["recent_changes_highlighted"],
+      "signal": "Explicit time anchors, progression, and recent worsening or turning points",
+      "dimensions": [
+        "timeline_evolution",
+        "recent_changes_highlighted"
+      ],
+      "if_missing_max_score": 3
+    },
+    {
+      "signal": "Readable summary that preserves clinically material content rather than becoming concise by omission",
+      "dimensions": [
+        "focused_not_cluttered",
+        "clarity_readability_formatting"
+      ],
       "if_missing_max_score": 3
     }
   ],
   "strict_downgrade_rules": [
     {
-      "condition": "Contains broad claims without concrete support",
-      "dimensions": ["factual_accuracy"],
+      "condition": "Replaces concrete diagnoses, prior events, or treatment context with broad generic wording",
+      "dimensions": [
+        "factual_accuracy",
+        "relevant_chronic_problem_coverage"
+      ],
       "penalty_points": 1
     },
     {
-      "condition": "Decision-relevant risks are implied but not explicitly stated",
-      "dimensions": ["usefulness_for_decision_making"],
+      "condition": "Recent worsening, escalation, failed treatment, or other decision-changing context is generalized away or omitted",
+      "dimensions": [
+        "timeline_evolution",
+        "recent_changes_highlighted",
+        "usefulness_for_decision_making"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "The summary reads cleanly only because clinically material detail has been stripped out",
+      "dimensions": [
+        "clarity_readability_formatting",
+        "focused_not_cluttered"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "Uses reassuring or stability language that is not supported by the clinical details presented",
+      "dimensions": [
+        "factual_accuracy",
+        "usefulness_for_decision_making"
+      ],
       "penalty_points": 1
     }
   ],
-  "tie_breaker_guidance": "When uncertain between two scores, choose the lower one."
+  "tie_breaker_guidance": "If deciding between readability and retained clinical substance, prefer the lower score unless the summary preserves decision-relevant detail explicitly."
 }

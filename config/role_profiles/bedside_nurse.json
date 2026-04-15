@@ -1,49 +1,80 @@
 {
   "role_id": "bedside_nurse",
-  "clinical_objective": "Support safe bedside execution, continuity, and near-term nursing actions.",
-  "evaluation_style": "Actionability and safety continuity; penalize missing care-transition details.",
+  "clinical_objective": "Support safe bedside continuity, near-term nursing action, and reliable handoff understanding.",
+  "evaluation_style": "Actionability- and continuity-oriented; a neat summary should not score well if it fails to support safe bedside care, monitoring, or next-shift handoff.",
   "primary_questions": [
-    "Does this summary support immediate bedside planning and monitoring?",
-    "Are medication, recent care changes, and follow-up implications clear?",
-    "Can nursing team use this without unsafe assumptions?"
+    "Can a bedside nurse safely continue care, monitor the patient, and hand off the case using this summary?",
+    "Are recent interventions, medication-relevant details, and next-step implications preserved clearly enough for nursing use?",
+    "Does the summary stay readable without dropping details that matter for bedside safety or continuity?"
   ],
   "high_priority_dimensions": [
     "recent_changes_highlighted",
     "usefulness_for_decision_making",
     "clarity_readability_formatting",
-    "focused_not_cluttered"
+    "focused_not_cluttered",
+    "relevant_chronic_problem_coverage"
   ],
   "lower_priority_dimensions": [
     "organized_by_condition"
   ],
   "must_have_signals": [
     {
-      "signal": "Recent interventions, transitions, or treatment changes relevant to ongoing care",
-      "dimensions": ["recent_changes_highlighted"],
+      "signal": "Recent interventions, treatment changes, or care transitions relevant to ongoing bedside care",
+      "dimensions": [
+        "recent_changes_highlighted"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Actionable care details for next-shift execution",
-      "dimensions": ["usefulness_for_decision_making"],
+      "signal": "Actionable bedside implications such as monitoring needs, medication context, or follow-up care relevance",
+      "dimensions": [
+        "usefulness_for_decision_making"
+      ],
       "if_missing_max_score": 3
     },
     {
-      "signal": "Readable format that reduces handoff friction",
-      "dimensions": ["clarity_readability_formatting"],
+      "signal": "Readable handoff structure that preserves clinically important nursing detail rather than achieving clarity through omission",
+      "dimensions": [
+        "clarity_readability_formatting",
+        "focused_not_cluttered"
+      ],
       "if_missing_max_score": 3
     }
   ],
   "strict_downgrade_rules": [
     {
-      "condition": "Mentions complex history but omits practical care implications",
-      "dimensions": ["usefulness_for_decision_making"],
+      "condition": "The summary sounds tidy but omits medication, monitoring, transition, or follow-up details needed for safe bedside use",
+      "dimensions": [
+        "usefulness_for_decision_making",
+        "clarity_readability_formatting",
+        "focused_not_cluttered"
+      ],
       "penalty_points": 1
     },
     {
-      "condition": "Recent changes are implied but not explicit",
-      "dimensions": ["recent_changes_highlighted"],
+      "condition": "Recent care changes are implied or generalized rather than stated explicitly",
+      "dimensions": [
+        "recent_changes_highlighted",
+        "usefulness_for_decision_making"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "Chronic conditions remain relevant to bedside care but are compressed into vague background language",
+      "dimensions": [
+        "relevant_chronic_problem_coverage",
+        "usefulness_for_decision_making"
+      ],
+      "penalty_points": 1
+    },
+    {
+      "condition": "The summary is readable only because nursing-relevant content has been stripped away",
+      "dimensions": [
+        "clarity_readability_formatting",
+        "focused_not_cluttered"
+      ],
       "penalty_points": 1
     }
   ],
-  "tie_breaker_guidance": "Prefer lower score if bedside actionability is not explicit."
+  "tie_breaker_guidance": "If bedside actionability is not explicit, choose the lower score even when the wording is clean."
 }

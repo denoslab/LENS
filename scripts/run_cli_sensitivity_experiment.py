@@ -24,13 +24,11 @@ DIMENSION_IDS = [
     "clarity_readability_formatting",
 ]
 
-DEFAULT_GOOD_FILE = Path(
-    "/Users/samuel/Desktop/LENS Project/MTS-Dialog-ValidationSet_top10_longest_section_texts.txt"
-)
-DEFAULT_BAD_FILE = Path(
-    "/Users/samuel/Desktop/LENS Project/lens_bad_samples_complete_english.txt"
-)
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_ROOT = REPO_ROOT / "data" / "phase1"
+DEFAULT_GOOD_FILE = DATA_ROOT / "raw" / "MTS-Dialog-ValidationSet_top10_longest_section_texts.txt"
+DEFAULT_BAD_FILE = DATA_ROOT / "raw" / "lens_bad_samples_complete_english.txt"
+DEFAULT_OUTDIR = REPO_ROOT / "reports" / "phase1" / "custom" / "run"
 SLEEP_SECONDS = 0.75
 GOOD_HEADER_RE = re.compile(
     r"^(?P<index>\d+)\.\s+ID=(?P<source_id>[^|]+)\|\s*section_header=(?P<section_header>[^|]+)\|.*$"
@@ -800,7 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run the existing grading CLI across good/bad summary batches."
     )
     parser.add_argument("--model", default="gpt-4o-mini")
-    parser.add_argument("--outdir", default="reports/cli_sensitivity_experiment")
+    parser.add_argument("--outdir", default=str(DEFAULT_OUTDIR))
     parser.add_argument("--python-bin", default=sys.executable)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-samples", type=int)

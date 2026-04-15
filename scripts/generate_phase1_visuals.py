@@ -36,11 +36,7 @@ DIMENSION_LABELS = {
 ROLE_NAMES = ["Physician", "Triage Nurse", "Bedside Nurse"]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPORTS_ROOT = REPO_ROOT / "reports"
-DEFAULT_OUTPUT_DIR = REPORTS_ROOT / "phase1_visuals"
-CANDIDATE_RESULTS = [
-    REPORTS_ROOT / "llm_sensitivity_experiment",
-    REPORTS_ROOT / "cli_sensitivity_experiment",
-]
+PHASE1_REPORTS_ROOT = REPORTS_ROOT / "phase1"
 
 
 @dataclass(frozen=True)
@@ -50,18 +46,34 @@ class SampleResult:
     payload: dict[str, Any]
 
 
+def iter_results_dirs() -> list[Path]:
+    if not PHASE1_REPORTS_ROOT.exists():
+        return []
+    results_dirs: list[Path] = []
+    for candidate in PHASE1_REPORTS_ROOT.glob("*/run"):
+        if (candidate / "outputs" / "good").is_dir() and (candidate / "outputs" / "bad").is_dir():
+            results_dirs.append(candidate)
+    return sorted(results_dirs)
+
+
+
 def detect_results_dir(explicit: str | None) -> Path:
     if explicit:
         path = Path(explicit)
         return path if path.is_absolute() else (REPO_ROOT / path)
 
-    existing = [path for path in CANDIDATE_RESULTS if path.exists()]
+    existing = iter_results_dirs()
     if not existing:
         raise FileNotFoundError(
-            "No Phase 1 results directory found under reports/. Expected one of: "
-            + ", ".join(str(path) for path in CANDIDATE_RESULTS)
+            f"No Phase 1 results directory found under {PHASE1_REPORTS_ROOT}. "
+            "Expected folders like reports/phase1/<label>/run with outputs/good and outputs/bad."
         )
     return max(existing, key=lambda path: path.stat().st_mtime)
+
+
+
+def default_visuals_dir(results_dir: Path) -> Path:
+    return results_dir.parent / "visuals"
 
 
 def load_group_results(results_dir: Path, group: str) -> list[SampleResult]:
@@ -307,7 +319,7 @@ These results suggest that the current LENS configuration is somewhat sensitive 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate Phase 1 charts and a short markdown report from existing experiment outputs.")
     parser.add_argument("--results-dir", default=None, help="Existing experiment result directory. If omitted, the newest Phase 1 result set is selected automatically.")
-    parser.add_argument("--outdir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for charts and the short report.")
+    parser.add_argument("--outdir", default=None, help="Directory for charts and the short report. Defaults to a sibling visuals/ folder next to the selected run/ directory.")
     return parser
 
 
@@ -316,9 +328,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     results_dir = detect_results_dir(args.results_dir)
-    outdir = Path(args.outdir)
-    if not outdir.is_absolute():
-        outdir = REPO_ROOT / outdir
+    if args.outdir is None:
+        outdir = default_visuals_dir(results_dir)
+    else:
+        outdir = Path(args.outdir)
+        if not outdir.is_absolute():
+            outdir = REPO_ROOT / outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
     good_results = load_group_results(results_dir, "good")

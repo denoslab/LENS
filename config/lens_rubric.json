@@ -16,8 +16,8 @@
     {
       "id": "organized_by_condition",
       "name": "Organized by Condition",
-      "definition": "Information is grouped by problem or condition rather than scattered by time.",
-      "evaluation_focus": "Logical grouping that supports quick scanning and comprehension."
+      "definition": "Information is grouped by problem or condition rather than scattered or flattened into generic statements.",
+      "evaluation_focus": "Logical grouping that supports quick scanning and comprehension; generic compression that removes clinically meaningful structure should be penalized."
     },
     {
       "id": "timeline_evolution",
@@ -34,20 +34,20 @@
     {
       "id": "focused_not_cluttered",
       "name": "Focused and Not Cluttered",
-      "definition": "Prioritizes medically important information and omits trivial or irrelevant details.",
-      "evaluation_focus": "Concise signal over noise; avoids clutter."
+      "definition": "Prioritizes medically important information without omitting clinically essential details under the guise of concision.",
+      "evaluation_focus": "Concise signal over noise, but brevity achieved by deleting key clinical details should be penalized."
     },
     {
       "id": "usefulness_for_decision_making",
       "name": "Usefulness for Decision-Making",
-      "definition": "Contains information a clinician would practically use to make decisions in the ED.",
-      "evaluation_focus": "Supports common clinical questions and risk assessment."
+      "definition": "Contains information a clinician would practically need to make decisions in the ED, including details that could change risk assessment, treatment, or disposition.",
+      "evaluation_focus": "Supports common clinical questions and risk assessment; omission of decision-changing details should lower the score even if the summary remains readable."
     },
     {
       "id": "clarity_readability_formatting",
       "name": "Clarity, Readability, and Formatting",
-      "definition": "Clearly written and easy to scan under time pressure.",
-      "evaluation_focus": "Readable structure and consistent formatting."
+      "definition": "Clearly written and easy to scan under time pressure while retaining clinically essential information.",
+      "evaluation_focus": "Readable structure and consistent formatting without sacrificing key content for brevity."
     }
   ]
 }

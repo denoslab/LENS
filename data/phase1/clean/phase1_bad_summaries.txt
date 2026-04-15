@@ -1,0 +1,49 @@
+
+
+ID=0
+The patient is a 26-year-old woman with low back pain after a recent minor fall. She has had occasional back discomfort in the past but was functioning well until this new event. Her symptoms are likely due to an acute flare. She previously had limited treatment and is now being reassessed. Follow-up has been arranged.
+
+--------------------------------------------------------------------------------
+
+ID=9
+The patient is a 57-year-old woman with foot pain related to bunions. She previously had surgery and has noticed some return of symptoms over time. Pain is worse on the right, and she has discomfort with standing at work. Orthotics provide partial relief. Overall, this is a chronic foot pain issue without much additional complexity.
+
+--------------------------------------------------------------------------------
+
+ID=14
+The patient is a 62-year-old man with long-standing discomfort in the legs and hands. He reports numbness and pain that have been bothering him for some time. He also mentions poor sleep and trouble walking. He has a history of heart disease and diabetes but is otherwise relatively stable. Pain medication provides some relief. Overall, this appears to be chronic neuropathy without any major recent change.
+
+--------------------------------------------------------------------------------
+
+ID=18
+The patient presents with recurrent vertigo that feels like the room is spinning. Symptoms occur randomly and are unrelated to position changes. Lorazepam has been helpful. He denies weakness or shakiness. His blood pressure medication changes do not seem related. This is likely the same as his prior vertigo and there has been no meaningful worsening.
+
+--------------------------------------------------------------------------------
+
+ID=37
+The patient returns after a recent kidney stone admission and is recovering well. She completed her hospital treatment and understands the follow-up plan. Her medications were reviewed and she has been taking them correctly. She has only mild residual symptoms and no major concerns today. She will continue routine outpatient follow-up.
+
+--------------------------------------------------------------------------------
+
+ID=43
+This is a 29-year-old man presenting after a wasp sting with concern for a severe allergic reaction. He has had anaphylaxis in the past with throat tightness and shortness of breath, and he feels this episode is similar. He reports generalized symptoms rather than a localized reaction. The main concern today is progression toward systemic allergy.
+
+--------------------------------------------------------------------------------
+
+ID=53
+This is a 49-year-old woman with atopic dermatitis who presents with fever, sore throat, cough, and bilateral ear pain for several days. Her hearing has been getting worse. She likely has an acute respiratory infection, and her skin medication issue is unrelated. She denies any sinus or jaw symptoms.
+
+--------------------------------------------------------------------------------
+
+ID=59
+This is a 53-year-old man presenting mainly for hernia pain and mild gastrointestinal upset. His leg symptoms have resolved and are no longer important. He has a limited past medical history and is not currently anticoagulated. Overall, this appears to be an uncomplicated abdominal complaint.
+
+--------------------------------------------------------------------------------
+
+ID=62
+The patient returns for follow-up of chronic neck discomfort and intermittent arm symptoms. Physical therapy has been helping, and she mainly reports pain with mild hand weakness. Her symptoms seem fairly stable overall. She denies major functional limitation and there are no significant new concerns. The current plan is to continue conservative treatment.
+
+--------------------------------------------------------------------------------
+
+ID=81
+This is a 58-year-old woman with chronic right knee pain that did not respond well to prior treatment. She previously had surgery and has progressive arthritis. Examination before surgery showed degenerative change in the knee. She is now being managed for advanced joint disease.

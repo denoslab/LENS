@@ -9,3 +9,4 @@ _site/
 .DS_Store
 *.patch
 reports/cli_sensitivity_experiment/outputs/
+reports/phase1/*/run/outputs/

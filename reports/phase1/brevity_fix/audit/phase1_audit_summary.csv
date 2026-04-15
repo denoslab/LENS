@@ -1,0 +1,11 @@
+source_id,badness_type,good_overall,bad_overall,overall_delta,expected_dims_count,hit_count,hit_rate
+0,Timeline distortion + omission-heavy,3.6367,3.3833,0.2534,5,4,0.8000
+9,Under-specification + omission-heavy + poor organization,3.5767,3.4767,0.1000,5,2,0.4000
+14,Omission-heavy + contradiction + vagueness,3.9300,2.9800,0.9500,6,6,1.0000
+18,Direct contradiction + medication-link removal,3.8533,3.1967,0.6566,5,4,0.8000
+37,Contradiction + omission-heavy + false reassurance,3.0867,3.4300,-0.3433,5,0,0.0000
+43,Contradiction + exaggeration + omission-heavy,3.1767,3.4600,-0.2833,5,0,0.0000
+53,Contradiction + omission-heavy + noise insertion,3.5800,3.3033,0.2767,5,2,0.4000
+59,Contradiction + omission-heavy,3.4300,2.8767,0.5533,5,2,0.4000
+62,Timeline weakening + omission-heavy + under-calling severity,3.7900,3.3833,0.4067,5,3,0.6000
+81,Vagueness + omission-heavy + loss of structural detail,3.0967,3.3600,-0.2633,4,0,0.0000
