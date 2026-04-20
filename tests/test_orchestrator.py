@@ -294,3 +294,99 @@ def test_aggregation_recomputes_role_overall_from_w_prior() -> None:
 
     expected_overall_across_roles = round(mean(expected_overalls), 4)
     assert result["overall_across_roles"] == expected_overall_across_roles
+
+
+def test_source_grounded_pipeline_rejects_heuristic_mode() -> None:
+    rubric, roles = _load_config()
+
+    with pytest.raises(ValueError, match="requires mode='llm'"):
+        asyncio.run(
+            run_pipeline(
+                summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+                source_text="Source packet shows insulin timing, oxygen dependence, and recent deterioration over 24 hours.",
+                mode="heuristic",
+                output_format="json",
+                rubric=rubric,
+                roles=roles,
+                gap_threshold=10.0,
+            )
+        )
+
+
+def test_source_grounded_llm_pipeline_sets_meta_and_passes_source() -> None:
+    rubric, roles = _load_config()
+    captured = {}
+    fixed_scores = {dim: 3 for dim in DIMENSION_IDS}
+
+    def role_scorer(summary, role, rubric, source_text=None):
+        captured[role.id] = source_text
+        return _make_agent(role.id, fixed_scores, overall=3.0)
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+            source_text="Source packet shows insulin timing, oxygen dependence, and recent deterioration over 24 hours.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+        )
+    )
+
+    assert result["meta"]["evaluation_context"] == "source_grounded"
+    assert result["meta"]["source_text_provided"] is True
+    assert set(captured) == set(CANONICAL_ROLE_IDS)
+    for value in captured.values():
+        assert value is not None
+        assert "oxygen dependence" in value
+
+
+def test_adjudication_uses_configured_model_not_hardcoded_default() -> None:
+    rubric, roles = _load_config()
+
+    disputed_physician = {dim: 3 for dim in DIMENSION_IDS}
+    disputed_triage = {dim: 3 for dim in DIMENSION_IDS}
+    disputed_bedside = {dim: 3 for dim in DIMENSION_IDS}
+    disputed_physician["factual_accuracy"] = 5
+    disputed_triage["factual_accuracy"] = 3
+    disputed_bedside["factual_accuracy"] = 2
+    seen = {}
+
+    def gap_scorer(summary, role, rubric):
+        if role.id == "physician":
+            return _make_agent(role.id, disputed_physician, overall=3.0)
+        if role.id == "triage_nurse":
+            return _make_agent(role.id, disputed_triage, overall=3.0)
+        return _make_agent(role.id, disputed_bedside, overall=3.0)
+
+    def adjudicator_spy(**kwargs):
+        seen.update(kwargs)
+        disputed_dims = kwargs["disputed_dims"]
+        return {
+            role_id: {
+                "scores": {dim: 4 for dim in disputed_dims},
+                "rationales": {dim: "ok" for dim in disputed_dims},
+            }
+            for role_id in CANONICAL_ROLE_IDS
+        }
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history and clear treatment updates over time.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=gap_scorer,
+            adjudicator=adjudicator_spy,
+            model="test-model-mini",
+            gap_threshold=0.5,
+            max_retries=2,
+        )
+    )
+
+    assert result["adjudication_ran"] is True
+    assert seen["model"] == "test-model-mini"
+    assert result["meta"]["adjudicator_model"] == "test-model-mini"

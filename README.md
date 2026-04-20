@@ -31,6 +31,7 @@ Each role scores the summary across 8 rubric dimensions on a `1-5` scale. The sy
 - Per-role weighted overall scoring based on questionnaire-derived role priors
 - Orchestrator validation, disagreement mapping, and score aggregation
 - Human-readable and JSON outputs
+- Optional source-grounded evaluation with `--source-text` or `--source-file`
 
 ## Pipeline Overview
 
@@ -137,6 +138,11 @@ lens --engine heuristic --summary "Your summary here"
 Use a summary file:
 ```bash
 lens --summary-file path/to/summary.txt
+```
+
+Run in source-grounded mode with a source packet or source record:
+```bash
+lens --summary-file path/to/summary.txt --source-file path/to/source_packet.txt --engine llm
 ```
 
 Output JSON instead of the human-readable report:
@@ -251,3 +257,7 @@ The current implementation includes:
 - orchestrator disagreement reporting
 - weighted final score aggregation
 - human-readable report formatting for demo and presentation use
+
+
+Source packet JSON files are auto-rendered into a compact narrative before source-grounded scoring.
+See `/Users/samuel/Documents/LENS Project/data/phase2/benchmarks/source_grounded_demo/manifest.json` and `/Users/samuel/Documents/LENS Project/scripts/run_source_grounded_benchmark.py` for the Phase 2 scaffold.

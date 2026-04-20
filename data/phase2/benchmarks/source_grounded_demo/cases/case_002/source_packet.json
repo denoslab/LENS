@@ -1,0 +1,42 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "case_002",
+  "patient_label": "Patient B",
+  "encounter_context": [
+    "74-year-old woman with atrial fibrillation on warfarin presenting after syncope.",
+    "ED evaluation focused on pacemaker dependency and recent supratherapeutic INR."
+  ],
+  "active_problems": [
+    "Syncope",
+    "Pacemaker-dependent rhythm",
+    "Supratherapeutic INR on warfarin"
+  ],
+  "chronic_conditions": [
+    "Atrial fibrillation",
+    "Pacemaker dependence",
+    "Chronic kidney disease"
+  ],
+  "recent_changes": [
+    "INR increased to 4.6 this week.",
+    "Recent syncopal episode at home."
+  ],
+  "medications": [
+    "Warfarin held pending repeat INR.",
+    "Telemetry monitoring ordered."
+  ],
+  "procedures_and_devices": [
+    "Permanent pacemaker",
+    "Telemetry"
+  ],
+  "safety_critical_facts": [
+    "Do not restart warfarin until INR is reassessed.",
+    "Pacemaker-dependent patient requires monitored disposition."
+  ],
+  "disposition_and_follow_up": [
+    "Cardiology consultation and monitored admission."
+  ],
+  "supporting_source_excerpts": [
+    "Cardiology note: pacemaker dependent rhythm.",
+    "Lab result: INR 4.6, warfarin held."
+  ]
+}

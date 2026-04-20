@@ -30,7 +30,17 @@ lens --summary "Your clinical summary here" --engine llm --model gpt-4o
 - Per-role weighted overall scoring based on role priors
 - Orchestrator validation, disagreement mapping, and score aggregation
 - Human-readable and JSON output formats
+- Optional source-grounded evaluation with `--source-text` or `--source-file`
 
 ## API Reference
 
 See the [API Reference](api/cli.md) for detailed module documentation.
+
+## Phase 2
+
+See [Source-Grounded Phase 2](source_grounded_phase2.md) for the current design and source-packet plan.
+
+
+## Phase 2 Scaffold
+- Source-grounded benchmark manifest: `/Users/samuel/Documents/LENS Project/data/phase2/benchmarks/source_grounded_demo/manifest.json`
+- Runner: `/Users/samuel/Documents/LENS Project/scripts/run_source_grounded_benchmark.py`

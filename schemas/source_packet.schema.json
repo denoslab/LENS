@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LENS Source Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_packet_version",
+    "source_id",
+    "encounter_context",
+    "active_problems",
+    "chronic_conditions",
+    "recent_changes",
+    "medications",
+    "procedures_and_devices",
+    "safety_critical_facts",
+    "disposition_and_follow_up",
+    "supporting_source_excerpts"
+  ],
+  "properties": {
+    "source_packet_version": {
+      "type": "string"
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "patient_label": {
+      "type": "string"
+    },
+    "encounter_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setting", "encounter_reason"],
+      "properties": {
+        "setting": {"type": "string"},
+        "encounter_reason": {"type": "string"},
+        "time_window": {"type": "string"}
+      }
+    },
+    "active_problems": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "chronic_conditions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "recent_changes": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "medications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"type": "string"},
+          "timing_or_schedule": {"type": "string"},
+          "why_important": {"type": "string"}
+        }
+      }
+    },
+    "procedures_and_devices": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "safety_critical_facts": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "disposition_and_follow_up": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "supporting_source_excerpts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "text"],
+        "properties": {
+          "label": {"type": "string"},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

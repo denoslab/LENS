@@ -1,0 +1,41 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "case_001",
+  "patient_label": "Patient A",
+  "encounter_context": [
+    "68-year-old man with COPD and insulin-dependent diabetes admitted for worsening dyspnea.",
+    "ED evaluation focused on home oxygen dependence and missed insulin doses during the last 24 hours."
+  ],
+  "active_problems": [
+    "Acute on chronic hypoxemic respiratory failure",
+    "Hyperglycemia after missed q8h insulin doses"
+  ],
+  "chronic_conditions": [
+    "COPD on 2 L home oxygen",
+    "Insulin-dependent diabetes",
+    "Heart failure"
+  ],
+  "recent_changes": [
+    "Required 4 L oxygen in the ED instead of baseline 2 L.",
+    "Last scheduled q8h insulin dose was missed before arrival."
+  ],
+  "medications": [
+    "Insulin q8h at home; restart immediately on admission.",
+    "Nebulized bronchodilators every 4 hours."
+  ],
+  "procedures_and_devices": [
+    "Home oxygen concentrator",
+    "Continuous pulse oximetry"
+  ],
+  "safety_critical_facts": [
+    "If q8h insulin is omitted, glucose rises rapidly and patient becomes clinically unstable.",
+    "Oxygen requirement above baseline must be monitored closely."
+  ],
+  "disposition_and_follow_up": [
+    "Admit to monitored medical bed."
+  ],
+  "supporting_source_excerpts": [
+    "Nursing note: patient missed the afternoon q8h insulin dose before arrival.",
+    "Respiratory therapy note: now requiring 4 L oxygen, baseline is 2 L at home."
+  ]
+}

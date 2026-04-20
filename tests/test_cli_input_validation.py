@@ -16,6 +16,10 @@ EMPTY_ERROR = "Error: summary is required and cannot be empty."
 SHORT_ERROR = (
     f"Error: summary must be at least {cli.MIN_SUMMARY_CHARS} characters after trimming whitespace."
 )
+SOURCE_SHORT_ERROR = (
+    f"Error: source text must be at least {cli.MIN_SOURCE_CHARS} characters after trimming whitespace if provided."
+)
+SOURCE_REQUIRES_LLM_ERROR = cli.SOURCE_GROUNDED_REQUIRES_LLM_ERROR
 
 
 def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -86,3 +90,65 @@ def test_invalid_summary_does_not_call_llm(
     assert exc.value.code == 2
     assert EMPTY_ERROR in captured.err
     assert calls["count"] == 0
+
+
+def test_cli_rejects_too_short_source_text() -> None:
+    valid_summary = (
+        "Patient has diabetes and CKD, with worsening shortness of breath over two days, "
+        "recent admission and medication changes relevant to ED decision-making."
+    )
+    result = _run_cli(["--engine", "heuristic", "--summary", valid_summary, "--source-text", "too short"])
+
+    assert result.returncode == 2
+    assert SOURCE_SHORT_ERROR in result.stderr
+
+
+def test_cli_rejects_source_grounded_input_in_heuristic_mode(tmp_path: Path) -> None:
+    summary = (
+        "Patient has diabetes, oxygen dependence, and recent medication changes with worsening symptoms over two days."
+    )
+    source_path = tmp_path / "source.txt"
+    source_path.write_text(
+        "ED source packet: patient has diabetes, home oxygen requirement, insulin schedule, and worsening shortness of breath over two days.",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(["--engine", "heuristic", "--summary", summary, "--source-file", str(source_path)])
+
+    assert result.returncode == 2
+    assert SOURCE_REQUIRES_LLM_ERROR in result.stderr
+
+
+def test_cli_json_output_hides_raw_source_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    summary = (
+        "Patient has diabetes, oxygen dependence, and recent medication changes with worsening symptoms over two days."
+    )
+    raw_source = "ED source packet: oxygen dependence, insulin timing, anticoagulation, and recent deterioration over two days."
+    source_path = tmp_path / "source.txt"
+    source_path.write_text(raw_source, encoding="utf-8")
+
+    async def _fake_run_pipeline(*args, **kwargs):
+        return {
+            "per_role_scorecards": [],
+            "disagreement_map": {},
+            "adjudication_ran": False,
+            "overall_across_roles": 3.0,
+            "meta": {"evaluation_context": "source_grounded", "source_text_provided": True},
+        }
+
+    monkeypatch.setattr(cli, "run_pipeline", _fake_run_pipeline)
+    monkeypatch.chdir(PROJECT_ROOT)
+
+    exit_code = cli.main([
+        "--engine", "llm",
+        "--format", "json",
+        "--summary", summary,
+        "--source-file", str(source_path),
+    ])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert raw_source not in captured.out
+    assert '"source_text"' not in captured.out
+    assert '"source"' in captured.out
+    assert '"sha256"' in captured.out

@@ -1,0 +1,45 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "example_case_001",
+  "patient_label": "Patient A",
+  "encounter_context": {
+    "setting": "Emergency Department",
+    "encounter_reason": "Short free-text reason for the encounter",
+    "time_window": "Optional time window or encounter period"
+  },
+  "active_problems": [
+    "Primary active problem or working diagnosis"
+  ],
+  "chronic_conditions": [
+    "Chronic condition relevant to current care"
+  ],
+  "recent_changes": [
+    "Recent worsening, admission, discharge, medication change, or escalation"
+  ],
+  "medications": [
+    {
+      "name": "Example medication",
+      "status": "continued / started / stopped / changed",
+      "timing_or_schedule": "Important schedule if clinically relevant",
+      "why_important": "Why omission of this detail would matter"
+    }
+  ],
+  "procedures_and_devices": [
+    "Relevant procedure or device"
+  ],
+  "safety_critical_facts": [
+    "A detail whose omission would create safety risk"
+  ],
+  "disposition_and_follow_up": [
+    "Follow-up or disposition detail"
+  ],
+  "supporting_source_excerpts": [
+    {
+      "label": "Hospital course",
+      "text": "Short source excerpt copied or distilled from the record"
+    }
+  ],
+  "notes": [
+    "Optional annotation for experiment design"
+  ]
+}

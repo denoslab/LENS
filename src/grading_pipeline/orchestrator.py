@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import inspect
 from statistics import mean
 from typing import Any, Callable, Dict, List
 
@@ -24,7 +25,7 @@ from .config import RoleProfile, Rubric
 from .llm_scoring import score_summary_llm
 from .openai_client import OpenAIClientError, create_response, extract_json_output
 from .scoring import AgentScore, compute_overall_score, score_summary_heuristic
-from .validation import validate_summary_text
+from .validation import validate_source_text, validate_summary_text
 
 # The 8 canonical rubric dimension IDs, in display order.
 DIMENSION_IDS = [
@@ -185,6 +186,7 @@ def _default_adjudicator(
     scorecards_by_role_id: Dict[str, Dict[str, Any]],
     disputed_dims: List[str],
     model: str,
+    source_text: str | None = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """LLM-based adjudicator that refines scores for disputed dimensions.
 
@@ -196,7 +198,7 @@ def _default_adjudicator(
         Nested dict: ``updates[role_id]["scores"|"rationales"][dim_id]``.
     """
     score_props = {
-        dim: {"type": "number", "minimum": 1, "maximum": 5} for dim in disputed_dims
+        dim: {"type": "integer", "minimum": 1, "maximum": 5} for dim in disputed_dims
     }
     rationale_props = {dim: {"type": "string"} for dim in disputed_dims}
 
@@ -239,6 +241,7 @@ def _default_adjudicator(
     rubric_subset = [d for d in rubric.dimensions if d.id in disputed_dims]
     adjudication_input = {
         "summary": summary,
+        "source_text": source_text,
         "disputed_dimensions": disputed_dims,
         "rubric": [
             {
@@ -252,17 +255,24 @@ def _default_adjudicator(
         "scorecards": scorecards_by_role_id,
     }
 
-    instructions = "\n".join(
-        [
-            "You are an adjudicator for role-aware summary grading.",
-            "Refine ONLY disputed dimensions for each role.",
-            "Return updates for all three roles in one response.",
-            "Do not change non-disputed dimensions.",
-            "Scores must remain within [1, 5].",
-            "Provide concise rationales for each disputed dimension.",
-            "Return only JSON matching the provided schema.",
-        ]
-    )
+    instruction_lines = [
+        "You are an adjudicator for role-aware summary grading.",
+        "Refine ONLY disputed dimensions for each role.",
+        "Return updates for all three roles in one response.",
+        "Do not change non-disputed dimensions.",
+        "Scores must remain within [1, 5].",
+        "Provide concise rationales for each disputed dimension.",
+    ]
+    if source_text is None:
+        instruction_lines.append("Use only the summary text and the disputed scorecards.")
+    else:
+        instruction_lines.extend([
+            "This is a source-grounded adjudication task.",
+            "Compare the summary against the provided source record when deciding updated scores.",
+            "If the summary conflicts with the source, omits clinically important source details, or appears to describe the wrong patient, adjudicate downward accordingly.",
+        ])
+    instruction_lines.append("Return only JSON matching the provided schema.")
+    instructions = "\n".join(instruction_lines)
 
     response = create_response(
         model=model,
@@ -362,8 +372,10 @@ async def run_pipeline(
     rubric: Rubric,
     roles: List[RoleProfile],
     model: str = "gpt-4o-mini",
+    adjudicator_model: str | None = None,
     temperature: float = 0.2,
     gap_threshold: float = 0.5,
+    source_text: str | None = None,
     max_retries: int = 2,
     role_scorer: Callable[[str, RoleProfile, Rubric], AgentScore] | None = None,
     adjudicator: Callable[..., Dict[str, Dict[str, Dict[str, Any]]]] | None = None,
@@ -392,24 +404,45 @@ async def run_pipeline(
         raise ValueError(f"Unsupported mode: {mode}")
 
     checked_summary = validate_summary_text(summary)
+    checked_source = validate_source_text(source_text) if source_text is not None else None
+    if checked_source is not None and mode != "llm":
+        raise ValueError(
+            "Source-grounded evaluation currently requires mode='llm'; heuristic mode ignores source text."
+        )
+    effective_adjudicator_model = adjudicator_model or model
 
     roles_by_id = {role.id: role for role in roles}
     missing_roles = [role_id for role_id in CANONICAL_ROLE_IDS if role_id not in roles_by_id]
     if missing_roles:
         raise ValueError(f"Missing required role configs: {missing_roles}")
 
+    def _supports_keyword_argument(func: Callable[..., Any], keyword: str) -> bool:
+        signature = inspect.signature(func)
+        for param in signature.parameters.values():
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                return True
+            if param.name == keyword:
+                return True
+        return False
+
+    scorer_supports_source = role_scorer is not None and _supports_keyword_argument(role_scorer, "source_text")
+    adjudicator_supports_source = adjudicator is not None and _supports_keyword_argument(adjudicator, "source_text")
+
     def score_once(input_summary: str, role: RoleProfile, input_rubric: Rubric) -> AgentScore:
         if role_scorer is not None:
+            if scorer_supports_source:
+                return role_scorer(input_summary, role, input_rubric, source_text=checked_source)
             return role_scorer(input_summary, role, input_rubric)
         if mode == "llm":
             return score_summary_llm(
                 input_summary,
                 role,
                 input_rubric,
+                source_text=checked_source,
                 model=model,
                 temperature=temperature,
             )
-        return score_summary_heuristic(input_summary, role, input_rubric)
+        return score_summary_heuristic(input_summary, role, input_rubric, source_text=checked_source)
 
     async def run_role(role: RoleProfile) -> AgentScore:
         return await asyncio.to_thread(score_once, checked_summary, role, rubric)
@@ -451,21 +484,25 @@ async def run_pipeline(
         adjudication_ran = True
 
         if adjudicator is not None:
-            updates = adjudicator(
-                summary=checked_summary,
-                rubric=rubric,
-                scorecards_by_role_id=scorecards_by_role_id,
-                disputed_dims=disputed_dims,
-                model="gpt-4o",
-            )
+            adjudicator_kwargs = {
+                "summary": checked_summary,
+                "rubric": rubric,
+                "scorecards_by_role_id": scorecards_by_role_id,
+                "disputed_dims": disputed_dims,
+                "model": effective_adjudicator_model,
+            }
+            if adjudicator_supports_source:
+                adjudicator_kwargs["source_text"] = checked_source
+            updates = adjudicator(**adjudicator_kwargs)
         else:
             updates = await asyncio.to_thread(
                 _default_adjudicator,
                 summary=checked_summary,
+                source_text=checked_source,
                 rubric=rubric,
                 scorecards_by_role_id=scorecards_by_role_id,
                 disputed_dims=disputed_dims,
-                model="gpt-4o",
+                model=effective_adjudicator_model,
             )
 
         _apply_adjudication_updates(scorecards_by_role_id, updates, disputed_dims)
@@ -510,5 +547,9 @@ async def run_pipeline(
             "output_format": output_format,
             "gap_threshold": gap_threshold,
             "max_retries": max_retries,
+            "scoring_model": model,
+            "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
+            "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
+            "source_text_provided": checked_source is not None,
         },
     }

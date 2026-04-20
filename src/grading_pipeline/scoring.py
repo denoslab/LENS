@@ -358,7 +358,7 @@ def compute_overall_score(
     return round(weighted_sum / total_weight, 2)
 
 
-def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric) -> AgentScore:
+def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric, source_text: str | None = None) -> AgentScore:
     """Score a clinical summary using the keyword-based heuristic engine.
 
     Runs all 8 dimension scorers, applies role-specific adjustments,

@@ -1,0 +1,73 @@
+{
+  "benchmark_name": "source_grounded_demo",
+  "cases": [
+    {
+      "case_id": "case_001",
+      "source_file": "cases/case_001/source_packet.json",
+      "reference_variant_id": "reference",
+      "variants": [
+        {
+          "variant_id": "reference",
+          "variant_type": "reference",
+          "summary_file": "cases/case_001/reference_summary.txt",
+          "expected_low_scoring_dimensions": []
+        },
+        {
+          "variant_id": "wrong_patient_case_002",
+          "variant_type": "wrong_patient_mismatch",
+          "summary_file": "cases/case_002/reference_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "relevant_chronic_problem_coverage",
+            "timeline_evolution",
+            "usefulness_for_decision_making"
+          ]
+        },
+        {
+          "variant_id": "safety_omission",
+          "variant_type": "safety_critical_omission",
+          "summary_file": "cases/case_001/safety_omission_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "recent_changes_highlighted",
+            "usefulness_for_decision_making"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "case_002",
+      "source_file": "cases/case_002/source_packet.json",
+      "reference_variant_id": "reference",
+      "variants": [
+        {
+          "variant_id": "reference",
+          "variant_type": "reference",
+          "summary_file": "cases/case_002/reference_summary.txt",
+          "expected_low_scoring_dimensions": []
+        },
+        {
+          "variant_id": "wrong_patient_case_001",
+          "variant_type": "wrong_patient_mismatch",
+          "summary_file": "cases/case_001/reference_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "relevant_chronic_problem_coverage",
+            "timeline_evolution",
+            "usefulness_for_decision_making"
+          ]
+        },
+        {
+          "variant_id": "safety_omission",
+          "variant_type": "safety_critical_omission",
+          "summary_file": "cases/case_002/safety_omission_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "recent_changes_highlighted",
+            "usefulness_for_decision_making"
+          ]
+        }
+      ]
+    }
+  ]
+}

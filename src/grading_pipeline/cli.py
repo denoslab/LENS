@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -18,10 +19,12 @@ from typing import Any, Dict, Sequence
 
 from .config import Rubric, load_roles, load_rubric
 from .orchestrator import run_pipeline
+from .source_packets import load_source_file
 from .validation import (
-    EMPTY_SUMMARY_ERROR,
+    MIN_SOURCE_CHARS,
     MIN_SUMMARY_CHARS,
-    SHORT_SUMMARY_ERROR,
+    SOURCE_GROUNDED_REQUIRES_LLM_ERROR,
+    validate_source_text,
     validate_summary_text,
 )
 
@@ -40,9 +43,43 @@ def _resolve_summary(args: argparse.Namespace) -> str | None:
     return None
 
 
+def _resolve_source(args: argparse.Namespace) -> tuple[str | None, Dict[str, Any] | None]:
+    """Read optional source text from ``--source-text`` or ``--source-file``."""
+    if args.source_text is not None:
+        return args.source_text, {"file_format": "inline_text"}
+    if args.source_file:
+        loaded = load_source_file(args.source_file)
+        return loaded.text, loaded.metadata
+    return None, None
+
+
 def _validate_summary(summary: str | None) -> str:
     """Thin wrapper around ``validate_summary_text`` for CLI use."""
     return validate_summary_text(summary)
+
+
+def _validate_source(source_text: str | None) -> str | None:
+    """Validate optional source text for source-grounded evaluation."""
+    if source_text is None:
+        return None
+    return validate_source_text(source_text)
+
+
+def _summarize_source_input(args: argparse.Namespace, source_text: str | None, source_metadata: Dict[str, Any] | None = None) -> Dict[str, Any] | None:
+    """Return non-sensitive metadata about the optional source input."""
+    if source_text is None:
+        return None
+
+    input_mode = "inline" if args.source_text is not None else "file"
+    payload = {
+        "provided": True,
+        "input_mode": input_mode,
+        "char_count": len(source_text),
+        "sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
+    }
+    if source_metadata:
+        payload.update({k: v for k, v in source_metadata.items() if v is not None and k != "path"})
+    return payload
 
 
 def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
@@ -104,6 +141,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--summary-file", type=str, help="Path to a file containing the summary."
     )
+    parser.add_argument("--source-text", type=str, help="Optional source record text for source-grounded evaluation.")
+    parser.add_argument("--source-file", type=str, help="Path to a file containing source record text or a source packet narrative.")
     parser.add_argument(
         "--rubric",
         type=str,
@@ -160,6 +199,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         summary = _validate_summary(_resolve_summary(args))
+        source_text, source_metadata = _resolve_source(args)
+        source_text = _validate_source(source_text)
+        if source_text is not None and args.engine != "llm":
+            raise ValueError(SOURCE_GROUNDED_REQUIRES_LLM_ERROR)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(2) from exc
@@ -178,6 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             temperature=args.temperature,
             gap_threshold=args.gap_threshold,
             max_retries=2,
+            source_text=source_text,
         )
     )
 
@@ -187,6 +231,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     payload = {
         "summary": summary,
+        "source": _summarize_source_input(args, source_text, source_metadata),
         "rubric_id": rubric.rubric_id,
         **result,
     }
