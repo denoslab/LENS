@@ -390,3 +390,86 @@ def test_adjudication_uses_configured_model_not_hardcoded_default() -> None:
     assert result["adjudication_ran"] is True
     assert seen["model"] == "test-model-mini"
     assert result["meta"]["adjudicator_model"] == "test-model-mini"
+
+
+def test_source_grounded_summary_aggregates_signals_across_roles() -> None:
+    """Per-role signals must be unioned into a single pipeline-level summary,
+    with ``wrong_patient_suspected`` OR'd and text findings deduped with the
+    roles that reported them."""
+    rubric, roles = _load_config()
+    fixed_scores = {dim: 3 for dim in DIMENSION_IDS}
+
+    per_role_signals = {
+        "physician": {
+            "wrong_patient_suspected": False,
+            "unsupported_claims": ["claim A", "shared claim"],
+            "omitted_safety_facts": ["missed insulin"],
+        },
+        "triage_nurse": {
+            "wrong_patient_suspected": True,
+            "unsupported_claims": ["shared claim"],
+            "omitted_safety_facts": [],
+        },
+        "bedside_nurse": {
+            "wrong_patient_suspected": False,
+            "unsupported_claims": [],
+            "omitted_safety_facts": ["missed insulin", "oxygen dependence not noted"],
+        },
+    }
+
+    def role_scorer(summary, role, rubric, source_text=None):
+        return AgentScore(
+            role_id=role.id,
+            scores=fixed_scores,
+            rationales={dim: "ok" for dim in DIMENSION_IDS},
+            overall_score=3.0,
+            source_grounded_signals=per_role_signals[role.id],
+        )
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+            source_text="Source packet shows insulin timing, oxygen dependence, and recent deterioration.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+        )
+    )
+
+    assert "source_grounded_summary" in result
+    summary = result["source_grounded_summary"]
+    assert summary["wrong_patient_suspected"] is True
+    assert summary["reporting_roles"] == list(CANONICAL_ROLE_IDS)
+
+    unsupported_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["unsupported_claims"]}
+    assert unsupported_by_text["claim A"] == ["physician"]
+    assert sorted(unsupported_by_text["shared claim"]) == ["physician", "triage_nurse"]
+
+    omitted_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["omitted_safety_facts"]}
+    assert sorted(omitted_by_text["missed insulin"]) == ["bedside_nurse", "physician"]
+    assert omitted_by_text["oxygen dependence not noted"] == ["bedside_nurse"]
+
+
+def test_source_grounded_summary_absent_when_no_signals() -> None:
+    rubric, roles = _load_config()
+    fixed_scores = {dim: 3 for dim in DIMENSION_IDS}
+
+    def role_scorer(summary, role, rubric):
+        return _make_agent(role.id, fixed_scores, overall=3.0)
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history and recent changes relevant to handoff.",
+            mode="heuristic",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+        )
+    )
+
+    assert "source_grounded_summary" not in result

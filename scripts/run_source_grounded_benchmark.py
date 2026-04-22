@@ -1,4 +1,10 @@
-"""Run a source-grounded benchmark manifest through the existing LENS CLI."""
+"""Run a source-grounded benchmark manifest through the existing LENS CLI.
+
+This script is intentionally an external experiment runner: each benchmark
+variant is scored by invoking ``python -m grading_pipeline`` with
+``--summary-file`` and ``--source-file``. That keeps Phase 2 results aligned
+with the same public workflow users run from the terminal.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +24,8 @@ from typing import Any, Dict, Iterable
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = PROJECT_ROOT / "data/phase2/benchmarks/source_grounded_demo/manifest.json"
 DEFAULT_OUTDIR = PROJECT_ROOT / "reports/phase2/source_grounded_demo"
+DEFAULT_RUBRIC = PROJECT_ROOT / "config/lens_rubric.json"
+DEFAULT_ROLES = PROJECT_ROOT / "config/roles.json"
 DIMENSION_IDS = [
     "factual_accuracy",
     "relevant_chronic_problem_coverage",
@@ -59,7 +67,9 @@ def load_manifest(path: str | Path) -> list[Case]:
                 variant_id=variant["variant_id"],
                 variant_type=variant["variant_type"],
                 summary_file=(base_dir / variant["summary_file"]).resolve(),
-                expected_low_scoring_dimensions=list(variant.get("expected_low_scoring_dimensions", [])),
+                expected_low_scoring_dimensions=list(
+                    variant.get("expected_low_scoring_dimensions", [])
+                ),
             )
             for variant in item["variants"]
         ]
@@ -74,8 +84,24 @@ def load_manifest(path: str | Path) -> list[Case]:
     return cases
 
 
-def _run_cli(summary_file: Path, source_file: Path, model: str, python_bin: str) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "PYTHONPATH": str(PROJECT_ROOT / "src")}
+def _run_cli(
+    summary_file: Path,
+    source_file: Path,
+    *,
+    model: str,
+    python_bin: str,
+    rubric: Path,
+    roles: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Run the existing CLI for one benchmark variant."""
+    env = dict(os.environ)
+    src_path = str(PROJECT_ROOT / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        f"{src_path}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else src_path
+    )
     return subprocess.run(
         [
             python_bin,
@@ -91,6 +117,10 @@ def _run_cli(summary_file: Path, source_file: Path, model: str, python_bin: str)
             str(summary_file),
             "--source-file",
             str(source_file),
+            "--rubric",
+            str(rubric),
+            "--roles",
+            str(roles),
         ],
         cwd=PROJECT_ROOT,
         capture_output=True,
@@ -99,11 +129,46 @@ def _run_cli(summary_file: Path, source_file: Path, model: str, python_bin: str)
     )
 
 
+def _write_error_log(
+    path: Path,
+    *,
+    case: Case,
+    variant: Variant,
+    result: subprocess.CompletedProcess[str] | None = None,
+    error: Exception | None = None,
+) -> None:
+    lines = [
+        f"case_id: {case.case_id}",
+        f"variant_id: {variant.variant_id}",
+        f"variant_type: {variant.variant_type}",
+        f"summary_file: {variant.summary_file}",
+        f"source_file: {case.source_file}",
+        "",
+    ]
+    if result is not None:
+        lines.extend(
+            [
+                f"returncode: {result.returncode}",
+                "--- stdout ---",
+                result.stdout,
+                "--- stderr ---",
+                result.stderr,
+            ]
+        )
+    if error is not None:
+        lines.extend(["--- exception ---", f"{type(error).__name__}: {error}"])
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def _dimension_means(payload: Dict[str, Any]) -> Dict[str, float]:
     means: Dict[str, float] = {}
     scorecards = payload.get("per_role_scorecards", [])
     for dim in DIMENSION_IDS:
-        values = [float(card["scores"][dim]) for card in scorecards if dim in card.get("scores", {})]
+        values = [
+            float(card["scores"][dim])
+            for card in scorecards
+            if dim in card.get("scores", {})
+        ]
         means[dim] = round(mean(values), 4) if values else 0.0
     return means
 
@@ -111,6 +176,22 @@ def _dimension_means(payload: Dict[str, Any]) -> Dict[str, float]:
 def _flagged_dimensions(payload: Dict[str, Any]) -> list[str]:
     disagreement = payload.get("disagreement_map", {})
     return [dim for dim, item in disagreement.items() if item.get("flag")]
+
+
+def _signal_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract structured signals from the source-grounded summary, if present."""
+    summary = payload.get("source_grounded_summary")
+    if not isinstance(summary, dict):
+        return {
+            "wrong_patient_suspected": False,
+            "unsupported_claim_count": 0,
+            "omitted_safety_fact_count": 0,
+        }
+    return {
+        "wrong_patient_suspected": bool(summary.get("wrong_patient_suspected")),
+        "unsupported_claim_count": len(summary.get("unsupported_claims", []) or []),
+        "omitted_safety_fact_count": len(summary.get("omitted_safety_facts", []) or []),
+    }
 
 
 def _summarize_case(case: Case, outputs: Dict[str, Dict[str, Any]]) -> list[dict[str, Any]]:
@@ -127,17 +208,25 @@ def _summarize_case(case: Case, outputs: Dict[str, Dict[str, Any]]) -> list[dict
         for dim in variant.expected_low_scoring_dimensions:
             if reference_dims[dim] > variant_dims[dim]:
                 hit_count += 1
+        signals = _signal_fields(payload)
         rows.append(
             {
                 "case_id": case.case_id,
                 "variant_id": variant.variant_id,
                 "variant_type": variant.variant_type,
                 "overall": float(payload["overall_across_roles"]),
-                "overall_delta_vs_reference": round(reference_overall - float(payload["overall_across_roles"]), 4),
+                "overall_delta_vs_reference": round(
+                    reference_overall - float(payload["overall_across_roles"]), 4
+                ),
                 "expected_dims_count": expected_count,
                 "hit_count": hit_count,
-                "hit_rate": round(hit_count / expected_count, 4) if expected_count else 1.0,
+                "hit_rate": round(hit_count / expected_count, 4)
+                if expected_count
+                else 1.0,
                 "flagged_dimensions": ", ".join(_flagged_dimensions(payload)),
+                "wrong_patient_suspected": signals["wrong_patient_suspected"],
+                "unsupported_claim_count": signals["unsupported_claim_count"],
+                "omitted_safety_fact_count": signals["omitted_safety_fact_count"],
             }
         )
     return rows
@@ -158,9 +247,32 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
     completed = len(rows)
     omission_rows = [row for row in rows if row["variant_type"] == "safety_critical_omission"]
     mismatch_rows = [row for row in rows if row["variant_type"] == "wrong_patient_mismatch"]
-    overall_mean_delta = round(mean(row["overall_delta_vs_reference"] for row in rows), 4) if rows else 0.0
-    omission_hit_rate = round(mean(row["hit_rate"] for row in omission_rows), 4) if omission_rows else 0.0
-    mismatch_hit_rate = round(mean(row["hit_rate"] for row in mismatch_rows), 4) if mismatch_rows else 0.0
+    overall_mean_delta = (
+        round(mean(row["overall_delta_vs_reference"] for row in rows), 4)
+        if rows
+        else 0.0
+    )
+    omission_hit_rate = (
+        round(mean(row["hit_rate"] for row in omission_rows), 4)
+        if omission_rows
+        else 0.0
+    )
+    mismatch_hit_rate = (
+        round(mean(row["hit_rate"] for row in mismatch_rows), 4)
+        if mismatch_rows
+        else 0.0
+    )
+
+    mismatch_signal_rate = (
+        round(mean(1.0 if row["wrong_patient_suspected"] else 0.0 for row in mismatch_rows), 4)
+        if mismatch_rows
+        else 0.0
+    )
+    omission_signal_rate = (
+        round(mean(1.0 if row["omitted_safety_fact_count"] > 0 else 0.0 for row in omission_rows), 4)
+        if omission_rows
+        else 0.0
+    )
 
     lines = [
         f"# Source-Grounded Benchmark Report: {manifest_name}",
@@ -168,8 +280,10 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
         "## Overview",
         f"- Completed variants: `{completed}`",
         f"- Mean overall delta vs reference: `{overall_mean_delta}`",
-        f"- Mean hit rate (wrong-patient mismatch): `{mismatch_hit_rate}`",
-        f"- Mean hit rate (safety-critical omission): `{omission_hit_rate}`",
+        f"- Mean hit rate (wrong-patient mismatch, score-based): `{mismatch_hit_rate}`",
+        f"- Mean hit rate (safety-critical omission, score-based): `{omission_hit_rate}`",
+        f"- Wrong-patient signal rate (LLM flagged): `{mismatch_signal_rate}`",
+        f"- Safety-omission signal rate (LLM flagged >=1 fact): `{omission_signal_rate}`",
         "",
         "## Variant Summary",
     ]
@@ -181,26 +295,15 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
                 f"  - overall delta vs reference: `{row['overall_delta_vs_reference']}`",
                 f"  - hit rate: `{row['hit_rate']}`",
                 f"  - flagged dimensions: `{row['flagged_dimensions'] or 'none'}`",
+                f"  - wrong_patient_suspected: `{row['wrong_patient_suspected']}`",
+                f"  - unsupported_claims: `{row['unsupported_claim_count']}`",
+                f"  - omitted_safety_facts: `{row['omitted_safety_fact_count']}`",
             ]
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the Phase 2 source-grounded benchmark scaffold.")
-    parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to benchmark manifest JSON.")
-    parser.add_argument("--model", default="gpt-4o-mini")
-    parser.add_argument("--python-bin", default=sys.executable)
-    parser.add_argument("--outdir", default=str(DEFAULT_OUTDIR))
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--max-cases", type=int)
-    parser.add_argument("--pretty", action="store_true")
-    args = parser.parse_args(argv)
-
-    cases = load_manifest(args.manifest)
-    if args.max_cases is not None:
-        cases = cases[: args.max_cases]
-
+def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str, Any]]:
     outdir = Path(args.outdir)
     outputs_dir = outdir / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -212,19 +315,43 @@ def main(argv: list[str] | None = None) -> int:
             output_path = outputs_dir / f"{case.case_id}__{variant.variant_id}.json"
             error_path = outputs_dir / f"{case.case_id}__{variant.variant_id}.error.txt"
             if args.resume and output_path.exists():
-                variant_outputs[variant.variant_id] = json.loads(output_path.read_text(encoding="utf-8"))
+                variant_outputs[variant.variant_id] = json.loads(
+                    output_path.read_text(encoding="utf-8")
+                )
                 continue
 
-            result = _run_cli(variant.summary_file, case.source_file, args.model, args.python_bin)
+            result = _run_cli(
+                variant.summary_file,
+                case.source_file,
+                model=args.model,
+                python_bin=args.python_bin,
+                rubric=Path(args.rubric),
+                roles=Path(args.roles),
+            )
             if result.returncode != 0:
-                error_path.write_text(result.stderr, encoding="utf-8")
+                _write_error_log(error_path, case=case, variant=variant, result=result)
                 continue
-            payload = json.loads(result.stdout)
+            try:
+                payload = json.loads(result.stdout)
+            except json.JSONDecodeError as exc:
+                _write_error_log(
+                    error_path,
+                    case=case,
+                    variant=variant,
+                    result=result,
+                    error=exc,
+                )
+                continue
+
+            if error_path.exists():
+                error_path.unlink()
             output_path.write_text(
-                json.dumps(payload, indent=2 if args.pretty else None), encoding="utf-8"
+                json.dumps(payload, indent=2 if args.pretty else None),
+                encoding="utf-8",
             )
             variant_outputs[variant.variant_id] = payload
-            time.sleep(0.5)
+            if args.sleep_seconds > 0:
+                time.sleep(args.sleep_seconds)
 
         if case.reference_variant_id not in variant_outputs:
             continue
@@ -232,6 +359,33 @@ def main(argv: list[str] | None = None) -> int:
             continue
         summary_rows.extend(_summarize_case(case, variant_outputs))
 
+    return summary_rows
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run the Phase 2 source-grounded benchmark via the LENS CLI."
+    )
+    parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to benchmark manifest JSON.")
+    parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument("--python-bin", default=sys.executable)
+    parser.add_argument("--outdir", default=str(DEFAULT_OUTDIR))
+    parser.add_argument("--rubric", default=str(DEFAULT_RUBRIC))
+    parser.add_argument("--roles", default=str(DEFAULT_ROLES))
+    parser.add_argument("--sleep-seconds", type=float, default=0.5)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--max-cases", type=int)
+    parser.add_argument("--pretty", action="store_true")
+    args = parser.parse_args(argv)
+
+    cases = load_manifest(args.manifest)
+    if args.max_cases is not None:
+        cases = cases[: args.max_cases]
+
+    summary_rows = _run_benchmark(args, cases)
+
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
     _write_csv(outdir / "summary.csv", summary_rows)
     _write_report(outdir / "report.md", Path(args.manifest).stem, summary_rows)
     return 0

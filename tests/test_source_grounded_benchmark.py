@@ -12,9 +12,13 @@ def test_load_manifest_resolves_case_files() -> None:
     manifest_path = PROJECT_ROOT / "data/phase2/benchmarks/source_grounded_demo/manifest.json"
     cases = load_manifest(manifest_path)
 
-    assert len(cases) == 2
-    assert cases[0].source_file.exists()
-    assert cases[0].variants[0].summary_file.exists()
+    assert len(cases) >= 5
+    for case in cases:
+        assert case.source_file.exists(), f"missing source for {case.case_id}"
+        for variant in case.variants:
+            assert variant.summary_file.exists(), (
+                f"missing summary for {case.case_id}/{variant.variant_id}"
+            )
 
 
 def test_summarize_case_counts_hits_against_reference() -> None:

@@ -98,6 +98,8 @@ def _agent_to_scorecard(agent: AgentScore, role: RoleProfile) -> Dict[str, Any]:
         scorecard["evidence"] = {
             dim: list(agent.evidence.get(dim, [])) for dim in DIMENSION_IDS
         }
+    if agent.source_grounded_signals is not None:
+        scorecard["source_grounded_signals"] = dict(agent.source_grounded_signals)
     return scorecard
 
 
@@ -364,6 +366,57 @@ def _aggregate_role_overalls(
     return round(mean(per_role_overalls), 4)
 
 
+def _aggregate_source_grounded_signals(
+    scorecards_by_role_id: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any] | None:
+    """Union per-role structured safety signals into a pipeline-level summary.
+
+    Returns ``None`` when no role reported signals (i.e. not a source-grounded
+    run, or the LLM omitted them). ``wrong_patient_suspected`` is the logical
+    OR across roles. ``unsupported_claims`` and ``omitted_safety_facts`` are
+    deduplicated unions preserving first-seen order; ``reporting_roles`` lists
+    which roles surfaced the finding for traceability.
+    """
+    wrong_patient_any = False
+    unsupported_seen: Dict[str, List[str]] = {}
+    omitted_seen: Dict[str, List[str]] = {}
+    reporting_roles: List[str] = []
+
+    for role_id in CANONICAL_ROLE_IDS:
+        signals = scorecards_by_role_id[role_id].get("source_grounded_signals")
+        if not isinstance(signals, dict):
+            continue
+        reporting_roles.append(role_id)
+        if bool(signals.get("wrong_patient_suspected")):
+            wrong_patient_any = True
+        for claim in signals.get("unsupported_claims", []) or []:
+            text = str(claim).strip()
+            if not text:
+                continue
+            unsupported_seen.setdefault(text, []).append(role_id)
+        for fact in signals.get("omitted_safety_facts", []) or []:
+            text = str(fact).strip()
+            if not text:
+                continue
+            omitted_seen.setdefault(text, []).append(role_id)
+
+    if not reporting_roles:
+        return None
+
+    return {
+        "wrong_patient_suspected": wrong_patient_any,
+        "unsupported_claims": [
+            {"text": text, "reporting_roles": roles}
+            for text, roles in unsupported_seen.items()
+        ],
+        "omitted_safety_facts": [
+            {"text": text, "reporting_roles": roles}
+            for text, roles in omitted_seen.items()
+        ],
+        "reporting_roles": reporting_roles,
+    }
+
+
 async def run_pipeline(
     summary: str,
     mode: str,
@@ -442,7 +495,7 @@ async def run_pipeline(
                 model=model,
                 temperature=temperature,
             )
-        return score_summary_heuristic(input_summary, role, input_rubric, source_text=checked_source)
+        return score_summary_heuristic(input_summary, role, input_rubric)
 
     async def run_role(role: RoleProfile) -> AgentScore:
         return await asyncio.to_thread(score_once, checked_summary, role, rubric)
@@ -531,25 +584,29 @@ async def run_pipeline(
 
     disagreement_map = build_disagreement_map(scorecards_by_role_id, gap_threshold)
     overall_across_roles = _aggregate_role_overalls(scorecards_by_role_id, roles_by_id)
+    source_grounded_summary = _aggregate_source_grounded_signals(scorecards_by_role_id)
 
     per_role_scorecards = [
         scorecards_by_role_id[role_id] for role_id in CANONICAL_ROLE_IDS
     ]
 
-    return {
+    result: Dict[str, Any] = {
         "per_role_scorecards": per_role_scorecards,
         "disagreement_map": disagreement_map,
         "adjudication_ran": adjudication_ran,
         "overall_across_roles": overall_across_roles,
-        "meta": {
-            "version": "orchestrator_v1",
-            "mode": mode,
-            "output_format": output_format,
-            "gap_threshold": gap_threshold,
-            "max_retries": max_retries,
-            "scoring_model": model,
-            "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
-            "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
-            "source_text_provided": checked_source is not None,
-        },
     }
+    if source_grounded_summary is not None:
+        result["source_grounded_summary"] = source_grounded_summary
+    result["meta"] = {
+        "version": "orchestrator_v1",
+        "mode": mode,
+        "output_format": output_format,
+        "gap_threshold": gap_threshold,
+        "max_retries": max_retries,
+        "scoring_model": model,
+        "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
+        "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
+        "source_text_provided": checked_source is not None,
+    }
+    return result

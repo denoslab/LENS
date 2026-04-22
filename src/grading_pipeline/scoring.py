@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .config import RoleProfile, Rubric
 
@@ -35,6 +35,11 @@ class AgentScore:
         overall_notes: Free-text note about the role's perspective.
         warnings: Any warnings generated during scoring (e.g. empty input).
         overall_score: Weighted average across dimensions (computed post-scoring).
+        source_grounded_signals: Structured safety flags from source-grounded
+            evaluation (None in summary-only mode). Keys:
+            ``wrong_patient_suspected`` (bool),
+            ``unsupported_claims`` (list[str]),
+            ``omitted_safety_facts`` (list[str]).
     """
     role_id: str
     scores: Dict[str, int]
@@ -43,6 +48,7 @@ class AgentScore:
     overall_notes: str = ""
     warnings: List[str] | None = None
     overall_score: float | None = None
+    source_grounded_signals: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict:
         payload = {
@@ -60,6 +66,8 @@ class AgentScore:
             payload["overall_score"] = self.overall_score
         if self.warnings:
             payload["warnings"] = self.warnings
+        if self.source_grounded_signals is not None:
+            payload["source_grounded_signals"] = self.source_grounded_signals
         return payload
 
 
@@ -358,7 +366,7 @@ def compute_overall_score(
     return round(weighted_sum / total_weight, 2)
 
 
-def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric, source_text: str | None = None) -> AgentScore:
+def score_summary_heuristic(summary: str, role: RoleProfile, rubric: Rubric) -> AgentScore:
     """Score a clinical summary using the keyword-based heuristic engine.
 
     Runs all 8 dimension scorers, applies role-specific adjustments,

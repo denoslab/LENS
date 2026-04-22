@@ -1,0 +1,64 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "case_003",
+  "patient_label": "Patient C",
+  "encounter_context": {
+    "setting": "Emergency Department",
+    "encounter_reason": "9-year-old girl with moderate-persistent asthma and peanut anaphylaxis history presenting with acute wheeze after exposure to a known peanut trigger.",
+    "time_window": "last 6 hours"
+  },
+  "active_problems": [
+    "Acute asthma exacerbation with oxygen desaturation to 90% on room air",
+    "Recent peanut ingestion with one dose of epinephrine administered by caregiver"
+  ],
+  "chronic_conditions": [
+    "Moderate-persistent asthma",
+    "Peanut anaphylaxis"
+  ],
+  "recent_changes": [
+    "Caregiver gave one IM epinephrine auto-injector 20 minutes before arrival.",
+    "Maintenance inhaled corticosteroid was skipped for the last 3 days."
+  ],
+  "medications": [
+    {
+      "name": "Albuterol nebulizer",
+      "status": "active",
+      "timing_or_schedule": "every 20 minutes x3 then reassess",
+      "why_important": "Primary reliever during exacerbation; intervals must be maintained until wheeze improves."
+    },
+    {
+      "name": "Oral prednisolone",
+      "status": "started in ED",
+      "timing_or_schedule": "2 mg/kg once daily x5 days",
+      "why_important": "Systemic corticosteroid course must continue at home to prevent late-phase relapse."
+    },
+    {
+      "name": "Epinephrine auto-injector",
+      "status": "one dose administered pre-arrival",
+      "timing_or_schedule": "repeat if biphasic anaphylaxis recurs",
+      "why_important": "Peanut anaphylaxis with pre-hospital epinephrine requires monitoring for biphasic reaction."
+    }
+  ],
+  "procedures_and_devices": [
+    "Continuous pulse oximetry",
+    "Peak flow monitoring"
+  ],
+  "safety_critical_facts": [
+    "Peanut allergy with anaphylaxis — avoid any peanut exposure during and after admission.",
+    "One pre-hospital epinephrine dose given — monitor for biphasic anaphylaxis for at least 4 hours.",
+    "Complete the 5-day oral prednisolone course to prevent late-phase relapse."
+  ],
+  "disposition_and_follow_up": [
+    "Observe in ED for 4 hours post-epinephrine, then discharge with asthma action plan if stable."
+  ],
+  "supporting_source_excerpts": [
+    {
+      "label": "Triage note",
+      "text": "Wheezing, SpO2 90% on room air, caregiver reports one epinephrine auto-injector given 20 min ago."
+    },
+    {
+      "label": "Allergy history",
+      "text": "Peanut anaphylaxis documented, previous ED visit last year with biphasic reaction."
+    }
+  ]
+}

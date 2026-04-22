@@ -1,0 +1,66 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "case_004",
+  "patient_label": "Patient D",
+  "encounter_context": {
+    "setting": "Emergency Department",
+    "encounter_reason": "62-year-old man with hypertension and prior CAD presenting with 2 hours of substernal chest pain; serial troponins rising and ECG shows new inferior ST-elevation.",
+    "time_window": "last 3 hours"
+  },
+  "active_problems": [
+    "STEMI of inferior wall",
+    "Ongoing ischemic chest pain"
+  ],
+  "chronic_conditions": [
+    "Coronary artery disease with prior PCI",
+    "Hypertension",
+    "Hyperlipidemia"
+  ],
+  "recent_changes": [
+    "Troponin rose from 0.05 to 4.2 over two hours.",
+    "New inferior ST-elevation on repeat ECG."
+  ],
+  "medications": [
+    {
+      "name": "Aspirin 325 mg",
+      "status": "administered in ED",
+      "timing_or_schedule": "chewed once now",
+      "why_important": "Loading dose required before PCI; do not withhold."
+    },
+    {
+      "name": "Ticagrelor 180 mg load",
+      "status": "administered in ED",
+      "timing_or_schedule": "once now",
+      "why_important": "Dual antiplatelet load before PCI; must not be confused with clopidogrel."
+    },
+    {
+      "name": "Heparin drip",
+      "status": "active",
+      "timing_or_schedule": "weight-based bolus and infusion",
+      "why_important": "Anticoagulation for STEMI during and after PCI."
+    }
+  ],
+  "procedures_and_devices": [
+    "Continuous cardiac telemetry",
+    "Peripheral IV access x2",
+    "Cath lab activation"
+  ],
+  "safety_critical_facts": [
+    "STEMI diagnosis confirmed — do not delay cath lab transfer.",
+    "Dual antiplatelet plus heparin has been loaded; hand off these doses explicitly.",
+    "Patient has an ASA allergy history that was ruled out before loading; document clearly."
+  ],
+  "disposition_and_follow_up": [
+    "Transfer to cardiac cath lab; admit to CCU post-procedure."
+  ],
+  "supporting_source_excerpts": [
+    {
+      "label": "ECG report",
+      "text": "New 2 mm inferior ST-elevation with reciprocal depression."
+    },
+    {
+      "label": "Lab result",
+      "text": "Troponin rising: 0.05 -> 4.2 ng/mL over 2 hours."
+    }
+  ]
+}

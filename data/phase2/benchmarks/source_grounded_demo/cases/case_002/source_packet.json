@@ -2,10 +2,11 @@
   "source_packet_version": "v1",
   "source_id": "case_002",
   "patient_label": "Patient B",
-  "encounter_context": [
-    "74-year-old woman with atrial fibrillation on warfarin presenting after syncope.",
-    "ED evaluation focused on pacemaker dependency and recent supratherapeutic INR."
-  ],
+  "encounter_context": {
+    "setting": "Emergency Department",
+    "encounter_reason": "74-year-old woman with atrial fibrillation on warfarin presenting after syncope; pacemaker-dependent with recent supratherapeutic INR.",
+    "time_window": "this week"
+  },
   "active_problems": [
     "Syncope",
     "Pacemaker-dependent rhythm",
@@ -21,12 +22,16 @@
     "Recent syncopal episode at home."
   ],
   "medications": [
-    "Warfarin held pending repeat INR.",
-    "Telemetry monitoring ordered."
+    {
+      "name": "Warfarin",
+      "status": "held",
+      "timing_or_schedule": "reassess after repeat INR",
+      "why_important": "Supratherapeutic INR 4.6 — do not restart until INR is reassessed."
+    }
   ],
   "procedures_and_devices": [
     "Permanent pacemaker",
-    "Telemetry"
+    "Continuous telemetry monitoring"
   ],
   "safety_critical_facts": [
     "Do not restart warfarin until INR is reassessed.",
@@ -36,7 +41,13 @@
     "Cardiology consultation and monitored admission."
   ],
   "supporting_source_excerpts": [
-    "Cardiology note: pacemaker dependent rhythm.",
-    "Lab result: INR 4.6, warfarin held."
+    {
+      "label": "Cardiology note",
+      "text": "Pacemaker-dependent rhythm."
+    },
+    {
+      "label": "Lab result",
+      "text": "INR 4.6; warfarin held."
+    }
   ]
 }

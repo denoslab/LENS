@@ -68,6 +68,108 @@
           ]
         }
       ]
+    },
+    {
+      "case_id": "case_003",
+      "source_file": "cases/case_003/source_packet.json",
+      "reference_variant_id": "reference",
+      "variants": [
+        {
+          "variant_id": "reference",
+          "variant_type": "reference",
+          "summary_file": "cases/case_003/reference_summary.txt",
+          "expected_low_scoring_dimensions": []
+        },
+        {
+          "variant_id": "wrong_patient_case_004",
+          "variant_type": "wrong_patient_mismatch",
+          "summary_file": "cases/case_004/reference_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "relevant_chronic_problem_coverage",
+            "timeline_evolution",
+            "usefulness_for_decision_making"
+          ]
+        },
+        {
+          "variant_id": "safety_omission",
+          "variant_type": "safety_critical_omission",
+          "summary_file": "cases/case_003/safety_omission_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "recent_changes_highlighted",
+            "usefulness_for_decision_making"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "case_004",
+      "source_file": "cases/case_004/source_packet.json",
+      "reference_variant_id": "reference",
+      "variants": [
+        {
+          "variant_id": "reference",
+          "variant_type": "reference",
+          "summary_file": "cases/case_004/reference_summary.txt",
+          "expected_low_scoring_dimensions": []
+        },
+        {
+          "variant_id": "wrong_patient_case_005",
+          "variant_type": "wrong_patient_mismatch",
+          "summary_file": "cases/case_005/reference_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "relevant_chronic_problem_coverage",
+            "timeline_evolution",
+            "usefulness_for_decision_making"
+          ]
+        },
+        {
+          "variant_id": "safety_omission",
+          "variant_type": "safety_critical_omission",
+          "summary_file": "cases/case_004/safety_omission_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "recent_changes_highlighted",
+            "usefulness_for_decision_making"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "case_005",
+      "source_file": "cases/case_005/source_packet.json",
+      "reference_variant_id": "reference",
+      "variants": [
+        {
+          "variant_id": "reference",
+          "variant_type": "reference",
+          "summary_file": "cases/case_005/reference_summary.txt",
+          "expected_low_scoring_dimensions": []
+        },
+        {
+          "variant_id": "wrong_patient_case_003",
+          "variant_type": "wrong_patient_mismatch",
+          "summary_file": "cases/case_003/reference_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "relevant_chronic_problem_coverage",
+            "timeline_evolution",
+            "usefulness_for_decision_making"
+          ]
+        },
+        {
+          "variant_id": "safety_omission",
+          "variant_type": "safety_critical_omission",
+          "summary_file": "cases/case_005/safety_omission_summary.txt",
+          "expected_low_scoring_dimensions": [
+            "factual_accuracy",
+            "recent_changes_highlighted",
+            "usefulness_for_decision_making"
+          ]
+        }
+      ]
     }
   ]
 }

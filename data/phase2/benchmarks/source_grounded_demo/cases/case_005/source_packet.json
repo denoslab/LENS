@@ -1,0 +1,60 @@
+{
+  "source_packet_version": "v1",
+  "source_id": "case_005",
+  "patient_label": "Patient E",
+  "encounter_context": {
+    "setting": "Emergency Department",
+    "encounter_reason": "81-year-old woman from a skilled nursing facility presenting with urosepsis; DNR/DNI documented, baseline dementia, on chronic dialysis via AV fistula.",
+    "time_window": "last 12 hours"
+  },
+  "active_problems": [
+    "Urosepsis with hypotension responsive to fluids",
+    "Acute on chronic confusion above dementia baseline"
+  ],
+  "chronic_conditions": [
+    "End-stage renal disease on hemodialysis",
+    "Advanced dementia",
+    "Hypertension"
+  ],
+  "recent_changes": [
+    "Blood pressure dropped to 82/50 before 500 mL fluid bolus.",
+    "Missed scheduled Tuesday hemodialysis session."
+  ],
+  "medications": [
+    {
+      "name": "Piperacillin-tazobactam (renal-dosed)",
+      "status": "first dose given within 1 hour of triage",
+      "timing_or_schedule": "every 8 hours, renal adjusted",
+      "why_important": "Door-to-antibiotic within 1 hour is essential for sepsis mortality; renal dosing must continue."
+    },
+    {
+      "name": "IV fluids",
+      "status": "active but cautious due to ESRD",
+      "timing_or_schedule": "30 mL/kg goal held at 500 mL boluses with reassessment",
+      "why_important": "Volume overload risk in dialysis-dependent patient; do not reflexively give full 30 mL/kg."
+    }
+  ],
+  "procedures_and_devices": [
+    "Left forearm AV fistula — DO NOT use for BP or IV access",
+    "Foley catheter placed in ED",
+    "Continuous telemetry"
+  ],
+  "safety_critical_facts": [
+    "DNR/DNI status is documented — do not intubate or start CPR.",
+    "AV fistula on left arm is dialysis access — no BP cuffs, no IVs, no blood draws from that arm.",
+    "Give fluids in 500 mL boluses with reassessment; avoid full 30 mL/kg resuscitation due to dialysis dependence."
+  ],
+  "disposition_and_follow_up": [
+    "Admit to step-down unit with nephrology on board for urgent dialysis."
+  ],
+  "supporting_source_excerpts": [
+    {
+      "label": "Advance directive",
+      "text": "DNR/DNI confirmed with documented POA."
+    },
+    {
+      "label": "Nursing note",
+      "text": "Left AV fistula present; do not use left arm for BP or IV access."
+    }
+  ]
+}
