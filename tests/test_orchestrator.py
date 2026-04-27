@@ -15,6 +15,7 @@ from grading_pipeline.orchestrator import (
     CANONICAL_ROLE_IDS,
     DIMENSION_IDS,
     ROLE_NAME_BY_ID,
+    _default_adjudicator,
     build_disagreement_map,
     run_pipeline,
 )
@@ -320,7 +321,18 @@ def test_source_grounded_llm_pipeline_sets_meta_and_passes_source() -> None:
 
     def role_scorer(summary, role, rubric, source_text=None):
         captured[role.id] = source_text
-        return _make_agent(role.id, fixed_scores, overall=3.0)
+        return AgentScore(
+            role_id=role.id,
+            scores=fixed_scores,
+            rationales={dim: "ok" for dim in DIMENSION_IDS},
+            overall_score=3.0,
+            source_grounded_signals={
+                "wrong_patient_suspected": False,
+                "unsupported_claims": [],
+                "contradicted_claims": [],
+                "omitted_safety_facts": [],
+            },
+        )
 
     result = asyncio.run(
         run_pipeline(
@@ -403,16 +415,19 @@ def test_source_grounded_summary_aggregates_signals_across_roles() -> None:
         "physician": {
             "wrong_patient_suspected": False,
             "unsupported_claims": ["claim A", "shared claim"],
+            "contradicted_claims": ["summary says no anticoagulation"],
             "omitted_safety_facts": ["missed insulin"],
         },
         "triage_nurse": {
             "wrong_patient_suspected": True,
             "unsupported_claims": ["shared claim"],
+            "contradicted_claims": ["summary says no anticoagulation"],
             "omitted_safety_facts": [],
         },
         "bedside_nurse": {
             "wrong_patient_suspected": False,
             "unsupported_claims": [],
+            "contradicted_claims": [],
             "omitted_safety_facts": ["missed insulin", "oxygen dependence not noted"],
         },
     }
@@ -448,6 +463,9 @@ def test_source_grounded_summary_aggregates_signals_across_roles() -> None:
     assert unsupported_by_text["claim A"] == ["physician"]
     assert sorted(unsupported_by_text["shared claim"]) == ["physician", "triage_nurse"]
 
+    contradicted_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["contradicted_claims"]}
+    assert sorted(contradicted_by_text["summary says no anticoagulation"]) == ["physician", "triage_nurse"]
+
     omitted_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["omitted_safety_facts"]}
     assert sorted(omitted_by_text["missed insulin"]) == ["bedside_nurse", "physician"]
     assert omitted_by_text["oxygen dependence not noted"] == ["bedside_nurse"]
@@ -473,3 +491,217 @@ def test_source_grounded_summary_absent_when_no_signals() -> None:
     )
 
     assert "source_grounded_summary" not in result
+
+
+def test_source_grounded_adjudication_updates_final_signals() -> None:
+    rubric, roles = _load_config()
+
+    per_role_scores = {
+        "physician": {dim: 3 for dim in DIMENSION_IDS},
+        "triage_nurse": {dim: 3 for dim in DIMENSION_IDS},
+        "bedside_nurse": {dim: 3 for dim in DIMENSION_IDS},
+    }
+    per_role_scores["physician"]["factual_accuracy"] = 5
+    per_role_scores["triage_nurse"]["factual_accuracy"] = 3
+    per_role_scores["bedside_nurse"]["factual_accuracy"] = 2
+
+    initial_signals = {
+        role_id: {
+            "wrong_patient_suspected": False,
+            "unsupported_claims": [],
+            "contradicted_claims": [],
+            "omitted_safety_facts": [],
+        }
+        for role_id in CANONICAL_ROLE_IDS
+    }
+    updated_signals = {
+        "physician": {
+            "wrong_patient_suspected": True,
+            "unsupported_claims": ["summary says no oxygen requirement"],
+            "contradicted_claims": ["summary says no insulin use"],
+            "omitted_safety_facts": ["missed q8h insulin"],
+        },
+        "triage_nurse": {
+            "wrong_patient_suspected": True,
+            "unsupported_claims": ["summary says no oxygen requirement"],
+            "contradicted_claims": ["summary says no insulin use"],
+            "omitted_safety_facts": [],
+        },
+        "bedside_nurse": {
+            "wrong_patient_suspected": False,
+            "unsupported_claims": [],
+            "contradicted_claims": [],
+            "omitted_safety_facts": ["missed q8h insulin", "oxygen dependence not noted"],
+        },
+    }
+
+    def gap_scorer(summary, role, rubric, source_text=None):
+        return AgentScore(
+            role_id=role.id,
+            scores=per_role_scores[role.id],
+            rationales={dim: "ok" for dim in DIMENSION_IDS},
+            overall_score=3.0,
+            source_grounded_signals=initial_signals[role.id],
+        )
+
+    def adjudicator_spy(**kwargs):
+        disputed_dims = kwargs["disputed_dims"]
+        return {
+            role_id: {
+                "scores": {dim: 2 for dim in disputed_dims},
+                "rationales": {dim: "revised" for dim in disputed_dims},
+                "source_grounded_signals": updated_signals[role_id],
+            }
+            for role_id in CANONICAL_ROLE_IDS
+        }
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+            source_text="Source packet shows insulin timing, oxygen dependence, and recent deterioration over 24 hours.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=gap_scorer,
+            adjudicator=adjudicator_spy,
+            gap_threshold=0.5,
+            max_retries=2,
+        )
+    )
+
+    by_role = {card["role_id"]: card for card in result["per_role_scorecards"]}
+    assert by_role["physician"]["source_grounded_signals"]["wrong_patient_suspected"] is True
+    assert by_role["physician"]["source_grounded_signals"]["unsupported_claims"] == [
+        "summary says no oxygen requirement"
+    ]
+    assert by_role["physician"]["source_grounded_signals"]["contradicted_claims"] == [
+        "summary says no insulin use"
+    ]
+
+    summary = result["source_grounded_summary"]
+    assert summary["wrong_patient_suspected"] is True
+    contradicted_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["contradicted_claims"]}
+    assert sorted(contradicted_by_text["summary says no insulin use"]) == ["physician", "triage_nurse"]
+    omitted_by_text = {entry["text"]: entry["reporting_roles"] for entry in summary["omitted_safety_facts"]}
+    assert sorted(omitted_by_text["missed q8h insulin"]) == ["bedside_nurse", "physician"]
+
+
+def test_source_grounded_meta_reports_truncation() -> None:
+    rubric, roles = _load_config()
+    fixed_scores = {dim: 3 for dim in DIMENSION_IDS}
+    valid_signals = {
+        "wrong_patient_suspected": False,
+        "unsupported_claims": [],
+        "contradicted_claims": [],
+        "omitted_safety_facts": [],
+    }
+
+    def role_scorer(summary, role, rubric, source_text=None):
+        return AgentScore(
+            role_id=role.id,
+            scores=fixed_scores,
+            rationales={dim: "ok" for dim in DIMENSION_IDS},
+            overall_score=3.0,
+            source_grounded_signals=valid_signals,
+        )
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+            source_text="x" * 120,
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+            max_source_chars=40,
+        )
+    )
+
+    assert result["meta"]["source_truncated"] is True
+    assert result["meta"]["source_original_chars"] == 120
+    assert result["meta"]["source_used_chars"] == 40
+    assert result["meta"]["source_max_chars"] == 40
+
+
+def test_default_adjudicator_uses_prepared_source_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    rubric, _ = _load_config()
+    captured = {}
+
+    scorecards_by_role_id = {
+        role_id: {
+            "scores": {dim: 3.0 for dim in DIMENSION_IDS},
+            "rationales": {dim: "ok" for dim in DIMENSION_IDS},
+            "overall": 3.0,
+            "source_grounded_signals": {
+                "wrong_patient_suspected": False,
+                "unsupported_claims": [],
+                "contradicted_claims": [],
+                "omitted_safety_facts": [],
+            },
+        }
+        for role_id in CANONICAL_ROLE_IDS
+    }
+
+    monkeypatch.setattr(
+        "grading_pipeline.orchestrator.create_response",
+        lambda **kwargs: captured.update(kwargs) or {"ok": True},
+    )
+    monkeypatch.setattr(
+        "grading_pipeline.orchestrator.extract_json_output",
+        lambda response: {
+            "updates": {
+                role_id: {
+                    "scores": {"factual_accuracy": 3},
+                    "rationales": {"factual_accuracy": "ok"},
+                    "source_grounded_signals": {
+                        "wrong_patient_suspected": False,
+                        "unsupported_claims": [],
+                        "contradicted_claims": [],
+                        "omitted_safety_facts": [],
+                    },
+                }
+                for role_id in CANONICAL_ROLE_IDS
+            }
+        },
+    )
+
+    _default_adjudicator(
+        summary="Patient summary for adjudication testing.",
+        source_text="y" * 80,
+        rubric=rubric,
+        scorecards_by_role_id=scorecards_by_role_id,
+        disputed_dims=["factual_accuracy"],
+        model="test-model",
+        max_source_chars=20,
+    )
+
+    payload = __import__("json").loads(captured["input_text"])
+    assert payload["source_grounding_meta"]["source_truncated"] is True
+    assert payload["source_grounding_meta"]["source_original_chars"] == 80
+    assert payload["source_grounding_meta"]["source_used_chars"] == 20
+    assert "source truncated to first 20 characters" in payload["source_text"]
+
+
+def test_run_pipeline_reports_role_failure_context() -> None:
+    rubric, roles = _load_config()
+
+    def role_scorer(summary, role, rubric):
+        if role.id == "triage_nurse":
+            raise RuntimeError("mock scorer failure")
+        return _make_agent(role.id, {dim: 3 for dim in DIMENSION_IDS}, overall=3.0)
+
+    with pytest.raises(RuntimeError, match="triage_nurse"):
+        asyncio.run(
+            run_pipeline(
+                summary="Patient has chronic disease history, medication changes, and enough detail for ED handoff scoring.",
+                mode="llm",
+                output_format="json",
+                rubric=rubric,
+                roles=roles,
+                role_scorer=role_scorer,
+                gap_threshold=10.0,
+            )
+        )

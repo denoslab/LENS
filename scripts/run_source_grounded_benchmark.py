@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, Iterable
@@ -36,6 +38,7 @@ DIMENSION_IDS = [
     "usefulness_for_decision_making",
     "clarity_readability_formatting",
 ]
+ERROR_PREVIEW_CHARS = 240
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,17 @@ class Case:
     source_file: Path
     reference_variant_id: str
     variants: list[Variant]
+
+
+@dataclass
+class BenchmarkStats:
+    attempted_cases: int = 0
+    attempted_variants: int = 0
+    completed_cases: int = 0
+    completed_variants: int = 0
+    resumed_variants: int = 0
+    skipped_cases: list[str] = field(default_factory=list)
+    failed_variants: list[str] = field(default_factory=list)
 
 
 def load_manifest(path: str | Path) -> list[Case]:
@@ -82,6 +96,34 @@ def load_manifest(path: str | Path) -> list[Case]:
             )
         )
     return cases
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _current_git_sha() -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
+
+
+def _preview_text(text: str, *, max_chars: int = ERROR_PREVIEW_CHARS) -> str:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[:max_chars] + "..."
 
 
 def _run_cli(
@@ -149,14 +191,14 @@ def _write_error_log(
         lines.extend(
             [
                 f"returncode: {result.returncode}",
-                "--- stdout ---",
-                result.stdout,
-                "--- stderr ---",
-                result.stderr,
+                f"stdout_chars: {len(result.stdout)}",
+                f"stderr_chars: {len(result.stderr)}",
+                f"stdout_preview: {_preview_text(result.stdout)}",
+                f"stderr_preview: {_preview_text(result.stderr)}",
             ]
         )
     if error is not None:
-        lines.extend(["--- exception ---", f"{type(error).__name__}: {error}"])
+        lines.extend(["exception:", f"{type(error).__name__}: {error}"])
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
@@ -185,11 +227,13 @@ def _signal_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "wrong_patient_suspected": False,
             "unsupported_claim_count": 0,
+            "contradicted_claim_count": 0,
             "omitted_safety_fact_count": 0,
         }
     return {
         "wrong_patient_suspected": bool(summary.get("wrong_patient_suspected")),
         "unsupported_claim_count": len(summary.get("unsupported_claims", []) or []),
+        "contradicted_claim_count": len(summary.get("contradicted_claims", []) or []),
         "omitted_safety_fact_count": len(summary.get("omitted_safety_facts", []) or []),
     }
 
@@ -226,6 +270,7 @@ def _summarize_case(case: Case, outputs: Dict[str, Dict[str, Any]]) -> list[dict
                 "flagged_dimensions": ", ".join(_flagged_dimensions(payload)),
                 "wrong_patient_suspected": signals["wrong_patient_suspected"],
                 "unsupported_claim_count": signals["unsupported_claim_count"],
+                "contradicted_claim_count": signals["contradicted_claim_count"],
                 "omitted_safety_fact_count": signals["omitted_safety_fact_count"],
             }
         )
@@ -243,13 +288,21 @@ def _write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) -> None:
-    completed = len(rows)
-    omission_rows = [row for row in rows if row["variant_type"] == "safety_critical_omission"]
-    mismatch_rows = [row for row in rows if row["variant_type"] == "wrong_patient_mismatch"]
+def _write_report(
+    path: Path,
+    manifest_name: str,
+    rows: list[dict[str, Any]],
+    *,
+    run_meta: Dict[str, Any],
+    stats: BenchmarkStats,
+) -> None:
+    degraded_rows = [row for row in rows if row["variant_type"] != "reference"]
+    reference_rows = [row for row in rows if row["variant_type"] == "reference"]
+    omission_rows = [row for row in degraded_rows if row["variant_type"] == "safety_critical_omission"]
+    mismatch_rows = [row for row in degraded_rows if row["variant_type"] == "wrong_patient_mismatch"]
     overall_mean_delta = (
-        round(mean(row["overall_delta_vs_reference"] for row in rows), 4)
-        if rows
+        round(mean(row["overall_delta_vs_reference"] for row in degraded_rows), 4)
+        if degraded_rows
         else 0.0
     )
     omission_hit_rate = (
@@ -262,7 +315,6 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
         if mismatch_rows
         else 0.0
     )
-
     mismatch_signal_rate = (
         round(mean(1.0 if row["wrong_patient_suspected"] else 0.0 for row in mismatch_rows), 4)
         if mismatch_rows
@@ -277,16 +329,40 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
     lines = [
         f"# Source-Grounded Benchmark Report: {manifest_name}",
         "",
+        "## Run Metadata",
+        f"- Timestamp (UTC): `{run_meta['timestamp_utc']}`",
+        f"- Git SHA: `{run_meta.get('git_sha') or 'unknown'}`",
+        f"- Model: `{run_meta['model']}`",
+        f"- Rubric: `{run_meta['rubric_path']}` (sha256 `{run_meta['rubric_sha256']}`)",
+        f"- Roles: `{run_meta['roles_path']}` (sha256 `{run_meta['roles_sha256']}`)",
+        f"- Manifest: `{run_meta['manifest_path']}` (sha256 `{run_meta['manifest_sha256']}`)",
+        f"- Resume enabled: `{run_meta['resume_enabled']}`",
+        "",
         "## Overview",
-        f"- Completed variants: `{completed}`",
-        f"- Mean overall delta vs reference: `{overall_mean_delta}`",
+        f"- Attempted cases: `{stats.attempted_cases}`",
+        f"- Attempted variants: `{stats.attempted_variants}`",
+        f"- Completed cases: `{stats.completed_cases}`",
+        f"- Completed variants: `{stats.completed_variants}`",
+        f"- Completed reference variants: `{len(reference_rows)}`",
+        f"- Completed degraded test variants: `{len(degraded_rows)}`",
+        f"- Resumed variants: `{stats.resumed_variants}`",
+        f"- Skipped cases: `{len(stats.skipped_cases)}`",
+        f"- Failed variants: `{len(stats.failed_variants)}`",
+        f"- Mean overall delta vs reference (degraded variants only): `{overall_mean_delta}`",
         f"- Mean hit rate (wrong-patient mismatch, score-based): `{mismatch_hit_rate}`",
         f"- Mean hit rate (safety-critical omission, score-based): `{omission_hit_rate}`",
         f"- Wrong-patient signal rate (LLM flagged): `{mismatch_signal_rate}`",
         f"- Safety-omission signal rate (LLM flagged >=1 fact): `{omission_signal_rate}`",
-        "",
-        "## Variant Summary",
     ]
+
+    if stats.skipped_cases:
+        lines.extend(["", "## Skipped Cases"])
+        lines.extend([f"- `{case_id}`" for case_id in stats.skipped_cases])
+    if stats.failed_variants:
+        lines.extend(["", "## Failed Variants"])
+        lines.extend([f"- `{variant_id}`" for variant_id in stats.failed_variants])
+
+    lines.extend(["", "## Variant Summary"])
     for row in rows:
         lines.extend(
             [
@@ -297,18 +373,24 @@ def _write_report(path: Path, manifest_name: str, rows: list[dict[str, Any]]) ->
                 f"  - flagged dimensions: `{row['flagged_dimensions'] or 'none'}`",
                 f"  - wrong_patient_suspected: `{row['wrong_patient_suspected']}`",
                 f"  - unsupported_claims: `{row['unsupported_claim_count']}`",
+                f"  - contradicted_claims: `{row['contradicted_claim_count']}`",
                 f"  - omitted_safety_facts: `{row['omitted_safety_fact_count']}`",
             ]
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str, Any]]:
+def _run_benchmark(
+    args: argparse.Namespace,
+    cases: list[Case],
+) -> tuple[list[dict[str, Any]], BenchmarkStats]:
     outdir = Path(args.outdir)
     outputs_dir = outdir / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
     summary_rows: list[dict[str, Any]] = []
+    stats = BenchmarkStats(attempted_cases=len(cases), attempted_variants=sum(len(case.variants) for case in cases))
+
     for case in cases:
         variant_outputs: Dict[str, Dict[str, Any]] = {}
         for variant in case.variants:
@@ -318,6 +400,8 @@ def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str
                 variant_outputs[variant.variant_id] = json.loads(
                     output_path.read_text(encoding="utf-8")
                 )
+                stats.resumed_variants += 1
+                stats.completed_variants += 1
                 continue
 
             result = _run_cli(
@@ -330,6 +414,7 @@ def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str
             )
             if result.returncode != 0:
                 _write_error_log(error_path, case=case, variant=variant, result=result)
+                stats.failed_variants.append(f"{case.case_id}/{variant.variant_id}")
                 continue
             try:
                 payload = json.loads(result.stdout)
@@ -341,6 +426,7 @@ def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str
                     result=result,
                     error=exc,
                 )
+                stats.failed_variants.append(f"{case.case_id}/{variant.variant_id}")
                 continue
 
             if error_path.exists():
@@ -350,16 +436,20 @@ def _run_benchmark(args: argparse.Namespace, cases: list[Case]) -> list[dict[str
                 encoding="utf-8",
             )
             variant_outputs[variant.variant_id] = payload
+            stats.completed_variants += 1
             if args.sleep_seconds > 0:
                 time.sleep(args.sleep_seconds)
 
-        if case.reference_variant_id not in variant_outputs:
+        if case.reference_variant_id not in variant_outputs or any(
+            variant.variant_id not in variant_outputs for variant in case.variants
+        ):
+            stats.skipped_cases.append(case.case_id)
             continue
-        if any(variant.variant_id not in variant_outputs for variant in case.variants):
-            continue
+
+        stats.completed_cases += 1
         summary_rows.extend(_summarize_case(case, variant_outputs))
 
-    return summary_rows
+    return summary_rows, stats
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -382,12 +472,44 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_cases is not None:
         cases = cases[: args.max_cases]
 
-    summary_rows = _run_benchmark(args, cases)
+    summary_rows, stats = _run_benchmark(args, cases)
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    run_meta = {
+        "timestamp_utc": _utc_now_iso(),
+        "git_sha": _current_git_sha(),
+        "model": args.model,
+        "python_bin": args.python_bin,
+        "manifest_path": str(Path(args.manifest).resolve()),
+        "manifest_sha256": _sha256_file(Path(args.manifest)),
+        "rubric_path": str(Path(args.rubric).resolve()),
+        "rubric_sha256": _sha256_file(Path(args.rubric)),
+        "roles_path": str(Path(args.roles).resolve()),
+        "roles_sha256": _sha256_file(Path(args.roles)),
+        "resume_enabled": bool(args.resume),
+        "stats": {
+            "attempted_cases": stats.attempted_cases,
+            "attempted_variants": stats.attempted_variants,
+            "completed_cases": stats.completed_cases,
+            "completed_variants": stats.completed_variants,
+            "resumed_variants": stats.resumed_variants,
+            "skipped_cases": stats.skipped_cases,
+            "failed_variants": stats.failed_variants,
+        },
+    }
     _write_csv(outdir / "summary.csv", summary_rows)
-    _write_report(outdir / "report.md", Path(args.manifest).stem, summary_rows)
+    _write_report(
+        outdir / "report.md",
+        Path(args.manifest).stem,
+        summary_rows,
+        run_meta=run_meta,
+        stats=stats,
+    )
+    (outdir / "run_meta.json").write_text(
+        json.dumps(run_meta, indent=2),
+        encoding="utf-8",
+    )
     return 0
 
 

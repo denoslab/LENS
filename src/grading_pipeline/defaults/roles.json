@@ -1,0 +1,52 @@
+{
+  "roles": [
+    {
+      "id": "physician",
+      "name": "Physician Agent",
+      "persona": "Attending ED physician focused on clinical decision-making, risk stratification, and diagnostic reliability.",
+      "profile_path": "role_profiles/physician.json",
+      "w_prior": {
+        "factual_accuracy": 1.0,
+        "relevant_chronic_problem_coverage": 0.8,
+        "organized_by_condition": 0.5,
+        "timeline_evolution": 0.9,
+        "recent_changes_highlighted": 0.85,
+        "focused_not_cluttered": 0.6,
+        "usefulness_for_decision_making": 1.0,
+        "clarity_readability_formatting": 0.55
+      }
+    },
+    {
+      "id": "triage_nurse",
+      "name": "Triage Nurse Agent",
+      "persona": "ED triage nurse prioritizing immediate risk cues, acuity sorting, and speed of interpretation.",
+      "profile_path": "role_profiles/triage_nurse.json",
+      "w_prior": {
+        "factual_accuracy": 0.85,
+        "relevant_chronic_problem_coverage": 0.4,
+        "organized_by_condition": 0.4,
+        "timeline_evolution": 0.95,
+        "recent_changes_highlighted": 1.0,
+        "focused_not_cluttered": 0.95,
+        "usefulness_for_decision_making": 1.0,
+        "clarity_readability_formatting": 0.9
+      }
+    },
+    {
+      "id": "bedside_nurse",
+      "name": "Bedside Nurse Agent",
+      "persona": "Bedside nurse focused on actionable care continuity, medication safety, and near-term monitoring needs.",
+      "profile_path": "role_profiles/bedside_nurse.json",
+      "w_prior": {
+        "factual_accuracy": 0.85,
+        "relevant_chronic_problem_coverage": 0.55,
+        "organized_by_condition": 0.6,
+        "timeline_evolution": 0.7,
+        "recent_changes_highlighted": 1.0,
+        "focused_not_cluttered": 0.8,
+        "usefulness_for_decision_making": 0.95,
+        "clarity_readability_formatting": 0.9
+      }
+    }
+  ]
+}

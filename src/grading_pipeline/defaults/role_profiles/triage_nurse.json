@@ -1,0 +1,51 @@
+{
+  "role_id": "triage_nurse",
+  "clinical_objective": "Enable fast acuity sorting and immediate prioritization decisions.",
+  "evaluation_style": "Signal-first and speed-first; penalize verbosity and low-actionability.",
+  "primary_questions": [
+    "Can I quickly identify how sick the patient may be right now?",
+    "Does the summary foreground what changed recently and why it matters now?",
+    "Can this support safe and rapid triage prioritization?"
+  ],
+  "high_priority_dimensions": [
+    "usefulness_for_decision_making",
+    "recent_changes_highlighted",
+    "timeline_evolution",
+    "focused_not_cluttered",
+    "clarity_readability_formatting"
+  ],
+  "lower_priority_dimensions": [
+    "relevant_chronic_problem_coverage",
+    "organized_by_condition"
+  ],
+  "must_have_signals": [
+    {
+      "signal": "Immediate acuity cues such as worsening pattern, instability clues, or current risk context",
+      "dimensions": ["usefulness_for_decision_making", "timeline_evolution"],
+      "if_missing_max_score": 3
+    },
+    {
+      "signal": "Clear statements of recent change and timing",
+      "dimensions": ["recent_changes_highlighted"],
+      "if_missing_max_score": 3
+    },
+    {
+      "signal": "Concise and scan-friendly structure for busy triage workflow",
+      "dimensions": ["focused_not_cluttered", "clarity_readability_formatting"],
+      "if_missing_max_score": 3
+    }
+  ],
+  "strict_downgrade_rules": [
+    {
+      "condition": "Long historical detail dominates current risk framing",
+      "dimensions": ["focused_not_cluttered", "usefulness_for_decision_making"],
+      "penalty_points": 1
+    },
+    {
+      "condition": "Important signals are present but hard to scan quickly",
+      "dimensions": ["clarity_readability_formatting"],
+      "penalty_points": 1
+    }
+  ],
+  "tie_breaker_guidance": "Bias toward lower score unless triage-critical evidence is explicit and easy to find."
+}

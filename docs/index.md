@@ -1,46 +1,59 @@
 # LENS: Role-Aware Clinical Summary Grading
 
-LENS is a role-aware multi-agent grading pipeline for clinical (ED handoff) summaries. Three clinical roles (Physician, Triage Nurse, Bedside Nurse) score summaries in parallel across 8 rubric dimensions, then an orchestrator detects disagreements, optionally adjudicates via LLM, and aggregates final scores.
+LENS is a role-aware multi-agent grading pipeline for AI-generated clinical summaries. Three Emergency Department roles — Physician, Triage Nurse, and Bedside Nurse — score the same summary across eight rubric dimensions. An orchestrator validates outputs, measures disagreement, optionally adjudicates disputed dimensions, and aggregates final scores.
 
-## Quick Start
+## Installation
 
-Install the package:
+### Installed package
 
 ```bash
 pip install edlens
 ```
 
-Run with the heuristic baseline (no API key needed):
+This uses the bundled default rubric, roles, and role profiles.
+
+### Editable development install
+
+```bash
+pip install -e ".[dev,docs]"
+```
+
+Use this mode if you want to modify configs, prompts, or experiment scripts.
+
+## Quick Start
+
+Heuristic baseline:
 
 ```bash
 lens --summary "Your clinical summary here" --engine heuristic
 ```
 
-Run with LLM scoring (requires `OPENAI_API_KEY`):
+LLM scoring:
 
 ```bash
-lens --summary "Your clinical summary here" --engine llm --model gpt-4o
+lens --summary "Your clinical summary here" --engine llm --model gpt-4o-mini
 ```
 
-## Features
+Source-grounded scoring:
 
-- Parallel scoring by three role-specific clinical agents
-- Shared 8-dimension LENS rubric
-- Two scoring modes: `llm` (OpenAI) and `heuristic` (keyword-based baseline)
-- Per-role weighted overall scoring based on role priors
-- Orchestrator validation, disagreement mapping, and score aggregation
-- Human-readable and JSON output formats
-- Optional source-grounded evaluation with `--source-text` or `--source-file`
+```bash
+lens --summary-file path/to/summary.txt --source-file path/to/source_packet.json --engine llm
+```
+
+## Configuration
+
+By default, LENS loads bundled package resources for:
+
+- the rubric
+- the role definitions
+- the role-specific prompt profiles
+
+You can override them with `--rubric` and `--roles`.
+
+## Source-Grounded Phase 2
+
+See [Source-Grounded Phase 2](source_grounded_phase2.md) for the current source-grounded design, source-packet strategy, and benchmark scaffold.
 
 ## API Reference
 
-See the [API Reference](api/cli.md) for detailed module documentation.
-
-## Phase 2
-
-See [Source-Grounded Phase 2](source_grounded_phase2.md) for the current design and source-packet plan.
-
-
-## Phase 2 Scaffold
-- Source-grounded benchmark manifest: `/Users/samuel/Documents/LENS Project/data/phase2/benchmarks/source_grounded_demo/manifest.json`
-- Runner: `/Users/samuel/Documents/LENS Project/scripts/run_source_grounded_benchmark.py`
+See the [API Reference](api/cli.md) for module-level documentation.

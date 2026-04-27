@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -68,7 +69,8 @@ def test_cli_accepts_valid_summary_in_heuristic_mode() -> None:
     assert "Physician:" in result.stdout
     assert "Triage Nurse:" in result.stdout
     assert "Bedside Nurse:" in result.stdout
-    assert "Disagreement:" in result.stdout
+    assert "Orchestrator Disagreement:" in result.stdout
+    assert "Evaluation Context:" in result.stdout
 
 
 def test_invalid_summary_does_not_call_llm(
@@ -119,7 +121,11 @@ def test_cli_rejects_source_grounded_input_in_heuristic_mode(tmp_path: Path) -> 
     assert SOURCE_REQUIRES_LLM_ERROR in result.stderr
 
 
-def test_cli_json_output_hides_raw_source_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_json_output_hides_raw_summary_and_source_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     summary = (
         "Patient has diabetes, oxygen dependence, and recent medication changes with worsening symptoms over two days."
     )
@@ -134,10 +140,16 @@ def test_cli_json_output_hides_raw_source_text(tmp_path: Path, monkeypatch: pyte
             "adjudication_ran": False,
             "overall_across_roles": 3.0,
             "meta": {"evaluation_context": "source_grounded", "source_text_provided": True},
+            "source_grounded_summary": {
+                "wrong_patient_suspected": False,
+                "unsupported_claims": [],
+                "contradicted_claims": [],
+                "omitted_safety_facts": [],
+                "reporting_roles": [],
+            },
         }
 
     monkeypatch.setattr(cli, "run_pipeline", _fake_run_pipeline)
-    monkeypatch.chdir(PROJECT_ROOT)
 
     exit_code = cli.main([
         "--engine", "llm",
@@ -147,8 +159,44 @@ def test_cli_json_output_hides_raw_source_text(tmp_path: Path, monkeypatch: pyte
     ])
 
     captured = capsys.readouterr()
+    payload = json.loads(captured.out)
     assert exit_code == 0
     assert raw_source not in captured.out
-    assert '"source_text"' not in captured.out
-    assert '"source"' in captured.out
-    assert '"sha256"' in captured.out
+    assert summary not in captured.out
+    assert "summary" not in payload
+    assert payload["summary_metadata"]["char_count"] == len(summary)
+    assert "text" not in payload["summary_metadata"]
+    assert payload["source"]["char_count"] == len(raw_source)
+    assert payload["config"]["rubric"]["mode"] in {"bundled_default", "file"}
+
+
+def test_cli_json_output_can_include_raw_summary_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    summary = (
+        "Patient has diabetes and chronic kidney disease, with worsening shortness of breath and recent medication changes."
+    )
+
+    async def _fake_run_pipeline(*args, **kwargs):
+        return {
+            "per_role_scorecards": [],
+            "disagreement_map": {},
+            "adjudication_ran": False,
+            "overall_across_roles": 3.0,
+            "meta": {"evaluation_context": "summary_only", "source_text_provided": False},
+        }
+
+    monkeypatch.setattr(cli, "run_pipeline", _fake_run_pipeline)
+
+    exit_code = cli.main([
+        "--engine", "llm",
+        "--format", "json",
+        "--summary", summary,
+        "--include-summary",
+    ])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["summary_metadata"]["text"] == summary

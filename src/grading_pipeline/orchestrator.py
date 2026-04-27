@@ -22,9 +22,18 @@ from statistics import mean
 from typing import Any, Callable, Dict, List
 
 from .config import RoleProfile, Rubric
-from .llm_scoring import score_summary_llm
+from .llm_scoring import (
+    DEFAULT_MAX_SOURCE_CHARS,
+    prepare_source_text,
+    score_summary_llm,
+)
 from .openai_client import OpenAIClientError, create_response, extract_json_output
-from .scoring import AgentScore, compute_overall_score, score_summary_heuristic
+from .scoring import (
+    AgentScore,
+    compute_overall_score,
+    normalize_source_grounded_signals,
+    score_summary_heuristic,
+)
 from .validation import validate_source_text, validate_summary_text
 
 # The 8 canonical rubric dimension IDs, in display order.
@@ -103,7 +112,9 @@ def _agent_to_scorecard(agent: AgentScore, role: RoleProfile) -> Dict[str, Any]:
     return scorecard
 
 
-def _validate_scorecard(scorecard: Dict[str, Any]) -> List[str]:
+def _validate_scorecard(
+    scorecard: Dict[str, Any], *, require_source_grounded_signals: bool = False
+) -> List[str]:
     """Validate a scorecard dict, returning a list of error strings (empty = valid).
 
     Checks: recognized role name, all 8 dimensions present with numeric
@@ -149,6 +160,15 @@ def _validate_scorecard(scorecard: Dict[str, Any]) -> List[str]:
     elif overall < 1 or overall > 5:
         errors.append(f"overall must be within [1, 5], got {overall}")
 
+    signals = scorecard.get("source_grounded_signals")
+    if require_source_grounded_signals and signals is None:
+        errors.append("source_grounded_signals must exist for source-grounded runs")
+    elif signals is not None:
+        try:
+            normalize_source_grounded_signals(signals)
+        except ValueError as exc:
+            errors.append(str(exc))
+
     return errors
 
 
@@ -189,6 +209,7 @@ def _default_adjudicator(
     disputed_dims: List[str],
     model: str,
     source_text: str | None = None,
+    max_source_chars: int = DEFAULT_MAX_SOURCE_CHARS,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """LLM-based adjudicator that refines scores for disputed dimensions.
 
@@ -204,24 +225,59 @@ def _default_adjudicator(
     }
     rationale_props = {dim: {"type": "string"} for dim in disputed_dims}
 
+    source_signal_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "wrong_patient_suspected",
+            "unsupported_claims",
+            "contradicted_claims",
+            "omitted_safety_facts",
+        ],
+        "properties": {
+            "wrong_patient_suspected": {"type": "boolean"},
+            "unsupported_claims": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {"type": "string"},
+            },
+            "contradicted_claims": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {"type": "string"},
+            },
+            "omitted_safety_facts": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {"type": "string"},
+            },
+        },
+    }
+
+    role_update_required = ["scores", "rationales"]
+    role_update_properties = {
+        "scores": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": disputed_dims,
+            "properties": score_props,
+        },
+        "rationales": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": disputed_dims,
+            "properties": rationale_props,
+        },
+    }
+    if source_text is not None:
+        role_update_required.append("source_grounded_signals")
+        role_update_properties["source_grounded_signals"] = source_signal_schema
+
     role_update_schema = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["scores", "rationales"],
-        "properties": {
-            "scores": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": disputed_dims,
-                "properties": score_props,
-            },
-            "rationales": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": disputed_dims,
-                "properties": rationale_props,
-            },
-        },
+        "required": role_update_required,
+        "properties": role_update_properties,
     }
 
     schema = {
@@ -241,9 +297,24 @@ def _default_adjudicator(
     }
 
     rubric_subset = [d for d in rubric.dimensions if d.id in disputed_dims]
+    prepared_source = (
+        prepare_source_text(source_text, max_chars=max_source_chars)
+        if source_text is not None
+        else None
+    )
     adjudication_input = {
         "summary": summary,
-        "source_text": source_text,
+        "source_text": prepared_source.text if prepared_source is not None else None,
+        "source_grounding_meta": (
+            {
+                "source_original_chars": prepared_source.original_chars,
+                "source_used_chars": prepared_source.kept_chars,
+                "source_truncated": prepared_source.truncated,
+                "source_max_chars": prepared_source.max_chars,
+            }
+            if prepared_source is not None
+            else None
+        ),
         "disputed_dimensions": disputed_dims,
         "rubric": [
             {
@@ -272,6 +343,7 @@ def _default_adjudicator(
             "This is a source-grounded adjudication task.",
             "Compare the summary against the provided source record when deciding updated scores.",
             "If the summary conflicts with the source, omits clinically important source details, or appears to describe the wrong patient, adjudicate downward accordingly.",
+            "Also return updated source_grounded_signals for each role so the final safety summary matches the final adjudicated judgment, including unsupported vs contradicted claims.",
         ])
     instruction_lines.append("Return only JSON matching the provided schema.")
     instructions = "\n".join(instruction_lines)
@@ -317,6 +389,11 @@ def _apply_adjudication_updates(
                     rationale_updates[dim]
                 )
 
+        if "source_grounded_signals" in role_update:
+            scorecards_by_role_id[role_id]["source_grounded_signals"] = (
+                normalize_source_grounded_signals(role_update["source_grounded_signals"])
+            )
+
 
 def _repair_disputed_fields(
     target_scorecard: Dict[str, Any],
@@ -338,6 +415,11 @@ def _repair_disputed_fields(
             target_scorecard["evidence"][dim] = list(
                 repaired_scorecard["evidence"].get(dim, [])
             )
+
+    if "source_grounded_signals" in repaired_scorecard:
+        target_scorecard["source_grounded_signals"] = dict(
+            repaired_scorecard["source_grounded_signals"]
+        )
 
 
 def _aggregate_role_overalls(
@@ -369,16 +451,10 @@ def _aggregate_role_overalls(
 def _aggregate_source_grounded_signals(
     scorecards_by_role_id: Dict[str, Dict[str, Any]],
 ) -> Dict[str, Any] | None:
-    """Union per-role structured safety signals into a pipeline-level summary.
-
-    Returns ``None`` when no role reported signals (i.e. not a source-grounded
-    run, or the LLM omitted them). ``wrong_patient_suspected`` is the logical
-    OR across roles. ``unsupported_claims`` and ``omitted_safety_facts`` are
-    deduplicated unions preserving first-seen order; ``reporting_roles`` lists
-    which roles surfaced the finding for traceability.
-    """
+    """Union per-role structured safety signals into a pipeline-level summary."""
     wrong_patient_any = False
     unsupported_seen: Dict[str, List[str]] = {}
+    contradicted_seen: Dict[str, List[str]] = {}
     omitted_seen: Dict[str, List[str]] = {}
     reporting_roles: List[str] = []
 
@@ -394,6 +470,11 @@ def _aggregate_source_grounded_signals(
             if not text:
                 continue
             unsupported_seen.setdefault(text, []).append(role_id)
+        for claim in signals.get("contradicted_claims", []) or []:
+            text = str(claim).strip()
+            if not text:
+                continue
+            contradicted_seen.setdefault(text, []).append(role_id)
         for fact in signals.get("omitted_safety_facts", []) or []:
             text = str(fact).strip()
             if not text:
@@ -408,6 +489,10 @@ def _aggregate_source_grounded_signals(
         "unsupported_claims": [
             {"text": text, "reporting_roles": roles}
             for text, roles in unsupported_seen.items()
+        ],
+        "contradicted_claims": [
+            {"text": text, "reporting_roles": roles}
+            for text, roles in contradicted_seen.items()
         ],
         "omitted_safety_facts": [
             {"text": text, "reporting_roles": roles}
@@ -427,8 +512,9 @@ async def run_pipeline(
     model: str = "gpt-4o-mini",
     adjudicator_model: str | None = None,
     temperature: float = 0.2,
-    gap_threshold: float = 0.5,
+    gap_threshold: float = 1.0,
     source_text: str | None = None,
+    max_source_chars: int = DEFAULT_MAX_SOURCE_CHARS,
     max_retries: int = 2,
     role_scorer: Callable[[str, RoleProfile, Rubric], AgentScore] | None = None,
     adjudicator: Callable[..., Dict[str, Dict[str, Dict[str, Any]]]] | None = None,
@@ -458,6 +544,11 @@ async def run_pipeline(
 
     checked_summary = validate_summary_text(summary)
     checked_source = validate_source_text(source_text) if source_text is not None else None
+    source_prep = (
+        prepare_source_text(checked_source, max_chars=max_source_chars, emit_warning=False)
+        if checked_source is not None
+        else None
+    )
     if checked_source is not None and mode != "llm":
         raise ValueError(
             "Source-grounded evaluation currently requires mode='llm'; heuristic mode ignores source text."
@@ -494,16 +585,36 @@ async def run_pipeline(
                 source_text=checked_source,
                 model=model,
                 temperature=temperature,
+                max_source_chars=max_source_chars,
             )
         return score_summary_heuristic(input_summary, role, input_rubric)
 
     async def run_role(role: RoleProfile) -> AgentScore:
-        return await asyncio.to_thread(score_once, checked_summary, role, rubric)
+        attempt = 0
+        while True:
+            try:
+                return await asyncio.to_thread(score_once, checked_summary, role, rubric)
+            except OpenAIClientError as exc:
+                attempt += 1
+                if attempt > max_retries:
+                    raise RuntimeError(
+                        f"Role '{role.id}' LLM scoring failed after {attempt} attempts: {exc}"
+                    ) from exc
+            except Exception as exc:
+                raise RuntimeError(f"Role '{role.id}' scoring failed: {exc}") from exc
 
-    initial_agents = await asyncio.gather(
-        *(run_role(roles_by_id[role_id]) for role_id in CANONICAL_ROLE_IDS)
+    initial_results = await asyncio.gather(
+        *(run_role(roles_by_id[role_id]) for role_id in CANONICAL_ROLE_IDS),
+        return_exceptions=True,
     )
+    role_failures = []
+    for role_id, result in zip(CANONICAL_ROLE_IDS, initial_results):
+        if isinstance(result, Exception):
+            role_failures.append(f"{role_id}: {result}")
+    if role_failures:
+        raise RuntimeError("Role scoring failed: " + "; ".join(role_failures))
 
+    initial_agents = list(initial_results)
     scorecards_by_role_id = {
         role_id: _agent_to_scorecard(agent, roles_by_id[role_id])
         for role_id, agent in zip(CANONICAL_ROLE_IDS, initial_agents)
@@ -512,7 +623,10 @@ async def run_pipeline(
     for role_id in CANONICAL_ROLE_IDS:
         retries = 0
         while True:
-            errors = _validate_scorecard(scorecards_by_role_id[role_id])
+            errors = _validate_scorecard(
+                scorecards_by_role_id[role_id],
+                require_source_grounded_signals=checked_source is not None,
+            )
             if not errors:
                 break
 
@@ -536,34 +650,41 @@ async def run_pipeline(
     if mode == "llm" and disputed_dims:
         adjudication_ran = True
 
-        if adjudicator is not None:
-            adjudicator_kwargs = {
-                "summary": checked_summary,
-                "rubric": rubric,
-                "scorecards_by_role_id": scorecards_by_role_id,
-                "disputed_dims": disputed_dims,
-                "model": effective_adjudicator_model,
-            }
-            if adjudicator_supports_source:
-                adjudicator_kwargs["source_text"] = checked_source
-            updates = adjudicator(**adjudicator_kwargs)
-        else:
-            updates = await asyncio.to_thread(
-                _default_adjudicator,
-                summary=checked_summary,
-                source_text=checked_source,
-                rubric=rubric,
-                scorecards_by_role_id=scorecards_by_role_id,
-                disputed_dims=disputed_dims,
-                model=effective_adjudicator_model,
-            )
+        try:
+            if adjudicator is not None:
+                adjudicator_kwargs = {
+                    "summary": checked_summary,
+                    "rubric": rubric,
+                    "scorecards_by_role_id": scorecards_by_role_id,
+                    "disputed_dims": disputed_dims,
+                    "model": effective_adjudicator_model,
+                }
+                if adjudicator_supports_source:
+                    adjudicator_kwargs["source_text"] = checked_source
+                updates = adjudicator(**adjudicator_kwargs)
+            else:
+                updates = await asyncio.to_thread(
+                    _default_adjudicator,
+                    summary=checked_summary,
+                    source_text=checked_source,
+                    rubric=rubric,
+                    scorecards_by_role_id=scorecards_by_role_id,
+                    disputed_dims=disputed_dims,
+                    model=effective_adjudicator_model,
+                    max_source_chars=max_source_chars,
+                )
+        except Exception as exc:
+            raise RuntimeError(f"Adjudication failed: {exc}") from exc
 
         _apply_adjudication_updates(scorecards_by_role_id, updates, disputed_dims)
 
         for role_id in CANONICAL_ROLE_IDS:
             retries = 0
             while True:
-                errors = _validate_scorecard(scorecards_by_role_id[role_id])
+                errors = _validate_scorecard(
+                    scorecards_by_role_id[role_id],
+                    require_source_grounded_signals=checked_source is not None,
+                )
                 if not errors:
                     break
 
@@ -608,5 +729,9 @@ async def run_pipeline(
         "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
         "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
         "source_text_provided": checked_source is not None,
+        "source_truncated": source_prep.truncated if source_prep is not None else False,
+        "source_original_chars": source_prep.original_chars if source_prep is not None else None,
+        "source_used_chars": source_prep.kept_chars if source_prep is not None else None,
+        "source_max_chars": source_prep.max_chars if source_prep is not None else None,
     }
     return result

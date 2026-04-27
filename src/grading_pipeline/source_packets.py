@@ -121,12 +121,16 @@ def _render_items(key: str, value: Any) -> list[str]:
 
 
 def looks_like_source_packet(data: Any) -> bool:
-    return isinstance(data, dict) and (
-        "source_packet_version" in data
-        or "source_id" in data
-        or "patient_label" in data
-        or "encounter_context" in data
-    )
+    """Return True only for explicit, versioned LENS source packets.
+
+    Generic JSON source records often contain keys like ``source_id`` or
+    ``encounter_context``. Requiring ``source_packet_version`` avoids
+    misclassifying arbitrary JSON as a LENS source packet.
+    """
+    if not isinstance(data, dict):
+        return False
+    version = data.get("source_packet_version")
+    return isinstance(version, str) and bool(version.strip())
 
 
 class SourcePacketValidationError(ValueError):
@@ -168,6 +172,17 @@ _MEDICATION_REQUIRED = ["name", "status"]
 _EXCERPT_REQUIRED = ["label", "text"]
 
 
+_TOP_LEVEL_OPTIONAL = ["patient_label", "notes"]
+_ENCOUNTER_OPTIONAL = ["time_window"]
+_MEDICATION_OPTIONAL = ["timing_or_schedule", "why_important"]
+
+
+def _check_no_extra_keys(value: Mapping[str, Any], path: str, allowed_keys: list[str], errors: list[str]) -> None:
+    extras = sorted(set(value.keys()) - set(allowed_keys))
+    for key in extras:
+        errors.append(f"{path} contains unknown field '{key}'")
+
+
 def _check_string(value: Any, path: str, errors: list[str]) -> None:
     if not isinstance(value, str):
         errors.append(f"{path} must be a string, got {type(value).__name__}")
@@ -200,6 +215,15 @@ def _check_object_array(
                 f"{item_path} must be an object, got {type(item).__name__}"
             )
             continue
+        optional_fields: list[str] = []
+        if required_fields == _MEDICATION_REQUIRED:
+            optional_fields = _MEDICATION_OPTIONAL
+        _check_no_extra_keys(
+            item,
+            item_path,
+            required_fields + optional_fields,
+            errors,
+        )
         for field in required_fields:
             if field not in item:
                 errors.append(f"{item_path} missing required field '{field}'")
@@ -207,6 +231,11 @@ def _check_object_array(
                 errors.append(
                     f"{item_path}.{field} must be a string, got "
                     f"{type(item[field]).__name__}"
+                )
+        for field in optional_fields:
+            if field in item and not isinstance(item[field], str):
+                errors.append(
+                    f"{item_path}.{field} must be a string, got {type(item[field]).__name__}"
                 )
 
 
@@ -226,6 +255,13 @@ def validate_source_packet(data: Any) -> list[str]:
         if field not in data:
             errors.append(f"Missing required field '{field}'")
 
+    _check_no_extra_keys(
+        data,
+        "source packet",
+        _REQUIRED_TOP_LEVEL + _TOP_LEVEL_OPTIONAL,
+        errors,
+    )
+
     if "source_packet_version" in data:
         _check_string(data["source_packet_version"], "source_packet_version", errors)
     if "source_id" in data:
@@ -240,6 +276,12 @@ def validate_source_packet(data: Any) -> list[str]:
                 f"encounter_context must be an object, got {type(ctx).__name__}"
             )
         else:
+            _check_no_extra_keys(
+                ctx,
+                "encounter_context",
+                _ENCOUNTER_REQUIRED + _ENCOUNTER_OPTIONAL,
+                errors,
+            )
             for field in _ENCOUNTER_REQUIRED:
                 if field not in ctx:
                     errors.append(

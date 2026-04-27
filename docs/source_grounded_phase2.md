@@ -2,41 +2,46 @@
 
 ## Goal
 
-Phase 2 extends LENS from summary-only grading to **source-grounded grading**.
-Instead of judging a summary in isolation, the model compares the generated
-summary against a patient-specific source record or a structured source packet.
+Phase 2 extends LENS from summary-only grading to **source-grounded grading**. Instead of judging a summary in isolation, the evaluator compares the AI-generated summary against a patient-specific source record or a structured source packet.
 
-## Why this matters
+## Why This Matters
 
-A summary can be well written but still be unsafe or wrong if it:
+A summary can be fluent and easy to read while still being unsafe if it:
+
 - omits clinically important details from the patient record
-- contradicts the source record
+- contradicts the patient record
 - includes unsupported claims
 - appears to describe the wrong patient
 
-This matters especially for safety-critical details such as:
-- medication timing or high-risk medication changes
+This is especially important for safety-critical details such as:
+
+- medication timing and high-risk medication changes
 - oxygen, device, or monitoring dependence
 - insulin, anticoagulation, allergy, or code status information
 - recent deterioration or urgent follow-up needs
 
-## Current implementation status
+## Current LENS Behavior
 
-The pipeline now accepts optional source text via:
+When source text is provided with:
+
 - `--source-text`
 - `--source-file`
 
-When source text is provided, the LLM scorer switches into a
-**source-grounded evaluation mode** and is instructed to compare the summary
-against the source record rather than score the summary in isolation.
+LENS switches into **source-grounded evaluation mode**.
 
-## Recommended source strategy
+In this mode, the scorer distinguishes between:
 
-Do not send an entire raw EHR chart directly unless necessary.
-Instead, prepare a **source packet** that distills the patient record into a
-compact, clinically relevant representation for evaluation.
+- `unsupported_claims`
+- `contradicted_claims`
+- `omitted_safety_facts`
+- `wrong_patient_suspected`
 
-Recommended packet sections:
+## Recommended Source Strategy
+
+Avoid sending an entire raw chart when a compact source packet is sufficient. A good source packet should distill the patient record into the most clinically relevant facts for evaluation.
+
+Recommended sections:
+
 - encounter context
 - active problems / working diagnoses
 - chronic conditions
@@ -45,38 +50,46 @@ Recommended packet sections:
 - procedures / devices
 - safety-critical facts
 - disposition / follow-up
-- short supporting excerpts
+- supporting excerpts
 
-## Priority evaluation checks
+## Priority Evaluation Checks
 
 Phase 2 should focus on whether LENS can detect:
+
 1. **Wrong-patient mismatch**
-   - summary content does not match the patient source record
 2. **Safety-critical omission**
-   - a clinically important detail is missing even though the summary still reads well
 3. **Contradiction**
-   - summary states something inconsistent with the source
 4. **Unsupported claim**
-   - summary adds facts not supported by the source
 
-## Suggested benchmark design
+## Suggested Benchmark Design
 
-Build paired source-grounded tests such as:
+Examples of useful source-grounded pairs:
+
 - original source packet + correct summary
 - original source packet + omission-heavy summary
 - original source packet + contradiction summary
-- patient A source packet + patient B summary (wrong-patient mismatch)
+- patient A source packet + patient B summary
 
-## Practical next step
+## Benchmark Scaffold
 
-Start with manually curated source packets for a small number of cases.
-This is a lower-risk way to test source-grounded prompting before attempting
-full EHR ingestion.
+The repo includes a local development scaffold for Phase 2:
 
-## Runner scaffold
+- manifest: `data/phase2/benchmarks/source_grounded_demo/manifest.json`
+- runner: `scripts/run_source_grounded_benchmark.py`
 
-A local Phase 2 scaffold is now included:
-- benchmark manifest: `/Users/samuel/Documents/LENS Project/data/phase2/benchmarks/source_grounded_demo/manifest.json`
-- runner: `/Users/samuel/Documents/LENS Project/scripts/run_source_grounded_benchmark.py`
+Run it with:
 
-This scaffold is meant for development-time validation of wrong-patient mismatch and safety-critical omission behavior.
+```bash
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --pretty
+```
+
+The runner saves:
+
+- raw per-variant JSON outputs
+- `summary.csv`
+- `report.md`
+- `run_meta.json`
+
+## Practical Note
+
+Source-grounded evaluation is a stronger faithfulness check than summary-only evaluation, but it still depends on the quality of the source packet and the consistency of LLM judgment. It should be treated as a structured evaluation layer, not as a replacement for clinical verification.

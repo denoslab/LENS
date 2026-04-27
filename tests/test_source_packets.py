@@ -215,3 +215,70 @@ def test_render_source_packet_renders_nested_list_of_dicts_as_inline() -> None:
     assert "{'problem'" not in rendered
     assert "problem: Hypoxia" in rendered
     assert "severity: acute" in rendered
+
+
+def test_load_source_file_treats_generic_json_as_json_text(tmp_path: Path) -> None:
+    """Generic JSON sources should not be misclassified as LENS source packets
+    just because they contain keys like ``source_id`` or ``encounter_context``."""
+    source_path = tmp_path / "generic.json"
+    source_path.write_text(
+        json.dumps(
+            {
+                "source_id": "mimic_123",
+                "encounter_context": "ED visit",
+                "note_text": "free-form JSON source that is not a LENS packet",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = load_source_file(source_path)
+
+    assert loaded.metadata["file_format"] == "json_text"
+    assert "free-form JSON source" in loaded.text
+
+
+def test_validate_source_packet_rejects_unknown_top_level_field() -> None:
+    packet = _valid_packet(unexpected_field="oops")
+
+    errors = validate_source_packet(packet)
+
+    assert any("unknown field 'unexpected_field'" in msg for msg in errors)
+
+
+def test_validate_source_packet_rejects_unknown_nested_field() -> None:
+    packet = _valid_packet(
+        encounter_context={
+            "setting": "Emergency Department",
+            "encounter_reason": "Test encounter",
+            "time_window": "last 24 hours",
+            "extra": "not allowed",
+        }
+    )
+
+    errors = validate_source_packet(packet)
+
+    assert any("encounter_context contains unknown field 'extra'" in msg for msg in errors)
+
+
+def test_source_packet_runtime_validator_matches_schema_requirements() -> None:
+    schema_path = PROJECT_ROOT / "schemas/source_packet.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["additionalProperties"] is False
+    assert sorted(schema["required"]) == sorted([
+        "source_packet_version",
+        "source_id",
+        "encounter_context",
+        "active_problems",
+        "chronic_conditions",
+        "recent_changes",
+        "medications",
+        "procedures_and_devices",
+        "safety_critical_facts",
+        "disposition_and_follow_up",
+        "supporting_source_excerpts",
+    ])
+    assert schema["properties"]["encounter_context"]["additionalProperties"] is False
+    assert schema["properties"]["medications"]["items"]["additionalProperties"] is False
+    assert schema["properties"]["supporting_source_excerpts"]["items"]["additionalProperties"] is False

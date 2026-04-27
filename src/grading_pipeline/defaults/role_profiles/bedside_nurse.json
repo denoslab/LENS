@@ -1,0 +1,49 @@
+{
+  "role_id": "bedside_nurse",
+  "clinical_objective": "Support safe bedside execution, continuity, and near-term nursing actions.",
+  "evaluation_style": "Actionability and safety continuity; penalize missing care-transition details.",
+  "primary_questions": [
+    "Does this summary support immediate bedside planning and monitoring?",
+    "Are medication, recent care changes, and follow-up implications clear?",
+    "Can nursing team use this without unsafe assumptions?"
+  ],
+  "high_priority_dimensions": [
+    "recent_changes_highlighted",
+    "usefulness_for_decision_making",
+    "clarity_readability_formatting",
+    "focused_not_cluttered"
+  ],
+  "lower_priority_dimensions": [
+    "organized_by_condition"
+  ],
+  "must_have_signals": [
+    {
+      "signal": "Recent interventions, transitions, or treatment changes relevant to ongoing care",
+      "dimensions": ["recent_changes_highlighted"],
+      "if_missing_max_score": 3
+    },
+    {
+      "signal": "Actionable care details for next-shift execution",
+      "dimensions": ["usefulness_for_decision_making"],
+      "if_missing_max_score": 3
+    },
+    {
+      "signal": "Readable format that reduces handoff friction",
+      "dimensions": ["clarity_readability_formatting"],
+      "if_missing_max_score": 3
+    }
+  ],
+  "strict_downgrade_rules": [
+    {
+      "condition": "Mentions complex history but omits practical care implications",
+      "dimensions": ["usefulness_for_decision_making"],
+      "penalty_points": 1
+    },
+    {
+      "condition": "Recent changes are implied but not explicit",
+      "dimensions": ["recent_changes_highlighted"],
+      "penalty_points": 1
+    }
+  ],
+  "tie_breaker_guidance": "Prefer lower score if bedside actionability is not explicit."
+}

@@ -1,11 +1,4 @@
-"""Command-line interface for the LENS grading pipeline.
-
-Usage examples::
-
-    python -m grading_pipeline --summary "Patient presents with..." --engine heuristic
-    python -m grading_pipeline --summary-file note.txt --engine llm --model gpt-4o
-    python -m grading_pipeline --summary "..." --engine heuristic --format json --pretty
-"""
+"""Command-line interface for the LENS grading pipeline."""
 
 from __future__ import annotations
 
@@ -17,7 +10,13 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
-from .config import Rubric, load_roles, load_rubric
+from .config import (
+    Rubric,
+    load_default_roles,
+    load_default_rubric,
+    load_roles,
+    load_rubric,
+)
 from .orchestrator import run_pipeline
 from .source_packets import load_source_file
 from .validation import (
@@ -29,17 +28,16 @@ from .validation import (
 )
 
 
-def _resolve_summary(args: argparse.Namespace) -> str | None:
-    """Read summary text from ``--summary`` flag or ``--summary-file`` path.
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    Returns ``None`` if neither was provided (triggers a validation error
-    downstream).  Treats ``--summary ""`` as explicit empty input — does
-    not fall back to ``--summary-file``.
-    """
+
+def _resolve_summary(args: argparse.Namespace) -> str | None:
+    """Read summary text from ``--summary`` or ``--summary-file``."""
     if args.summary is not None:
         return args.summary
     if args.summary_file:
-        return Path(args.summary_file).read_text()
+        return Path(args.summary_file).read_text(encoding="utf-8")
     return None
 
 
@@ -54,18 +52,30 @@ def _resolve_source(args: argparse.Namespace) -> tuple[str | None, Dict[str, Any
 
 
 def _validate_summary(summary: str | None) -> str:
-    """Thin wrapper around ``validate_summary_text`` for CLI use."""
     return validate_summary_text(summary)
 
 
 def _validate_source(source_text: str | None) -> str | None:
-    """Validate optional source text for source-grounded evaluation."""
     if source_text is None:
         return None
     return validate_source_text(source_text)
 
 
-def _summarize_source_input(args: argparse.Namespace, source_text: str | None, source_metadata: Dict[str, Any] | None = None) -> Dict[str, Any] | None:
+def _summarize_summary_input(summary: str, *, include_text: bool) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "char_count": len(summary),
+        "sha256": _sha256_text(summary),
+    }
+    if include_text:
+        payload["text"] = summary
+    return payload
+
+
+def _summarize_source_input(
+    args: argparse.Namespace,
+    source_text: str | None,
+    source_metadata: Dict[str, Any] | None = None,
+) -> Dict[str, Any] | None:
     """Return non-sensitive metadata about the optional source input."""
     if source_text is None:
         return None
@@ -75,21 +85,46 @@ def _summarize_source_input(args: argparse.Namespace, source_text: str | None, s
         "provided": True,
         "input_mode": input_mode,
         "char_count": len(source_text),
-        "sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
+        "sha256": _sha256_text(source_text),
     }
     if source_metadata:
-        payload.update({k: v for k, v in source_metadata.items() if v is not None and k != "path"})
+        payload.update(
+            {k: v for k, v in source_metadata.items() if v is not None and k != "path"}
+        )
     return payload
+
+
+def _load_runtime_config(
+    args: argparse.Namespace,
+) -> tuple[Rubric, list[Any], Dict[str, Any]]:
+    if args.rubric:
+        rubric = load_rubric(args.rubric)
+        rubric_source = {"mode": "file", "path": str(Path(args.rubric).resolve())}
+    else:
+        rubric = load_default_rubric()
+        rubric_source = {"mode": "bundled_default", "resource": "grading_pipeline.defaults/lens_rubric.json"}
+
+    if args.roles:
+        roles = load_roles(args.roles, rubric.dimension_ids)
+        roles_source = {"mode": "file", "path": str(Path(args.roles).resolve())}
+    else:
+        roles = load_default_roles(rubric.dimension_ids)
+        roles_source = {"mode": "bundled_default", "resource": "grading_pipeline.defaults/roles.json"}
+
+    return rubric, roles, {"rubric": rubric_source, "roles": roles_source}
 
 
 def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
     """Format and print pipeline results as a human-readable report to stdout."""
     separator = "----------------------------------------"
+    meta = result.get("meta", {})
 
-    # Keep one empty line before the formatted report block.
     print("")
     print(separator)
     print("Role-Aware Multi-Agent Grading Pipeline:")
+    print(separator)
+    print(f"Evaluation Context: {meta.get('evaluation_context', 'unknown')}")
+    print(f"Adjudication Ran: {'yes' if result.get('adjudication_ran') else 'no'}")
     print(separator)
 
     for scorecard in result["per_role_scorecards"]:
@@ -110,7 +145,6 @@ def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
             print("Overall: NA")
         print(separator)
 
-    # Keep an extra separator before disagreement to match the requested layout.
     print(separator)
     print("Orchestrator Disagreement:")
     print(separator)
@@ -125,6 +159,16 @@ def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
             print(f"{dim.name}: NA")
     print(separator)
 
+    source_summary = result.get("source_grounded_summary")
+    if isinstance(source_summary, dict):
+        print(f"Wrong-Patient Suspected: {'yes' if source_summary.get('wrong_patient_suspected') else 'no'}")
+        print(
+            f"Unsupported Claims: {len(source_summary.get('unsupported_claims', []) or [])} | "
+            f"Contradicted Claims: {len(source_summary.get('contradicted_claims', []) or [])} | "
+            f"Omitted Safety Facts: {len(source_summary.get('omitted_safety_facts', []) or [])}"
+        )
+        print(separator)
+
     overall_score = result.get("overall_across_roles")
     if isinstance(overall_score, (int, float)):
         print(f"Overall Score: {float(overall_score):.1f}")
@@ -133,7 +177,6 @@ def _print_human(result: Dict[str, Any], rubric: Rubric) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Create the CLI argument parser with all pipeline options."""
     parser = argparse.ArgumentParser(
         description="Role-aware multi-agent grading pipeline (orchestrated)."
     )
@@ -141,19 +184,27 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--summary-file", type=str, help="Path to a file containing the summary."
     )
-    parser.add_argument("--source-text", type=str, help="Optional source record text for source-grounded evaluation.")
-    parser.add_argument("--source-file", type=str, help="Path to a file containing source record text or a source packet narrative.")
+    parser.add_argument(
+        "--source-text",
+        type=str,
+        help="Optional source record text for source-grounded evaluation.",
+    )
+    parser.add_argument(
+        "--source-file",
+        type=str,
+        help="Path to a file containing source record text or a source packet narrative.",
+    )
     parser.add_argument(
         "--rubric",
         type=str,
-        default=str(Path("config/lens_rubric.json")),
-        help="Path to rubric JSON.",
+        default=None,
+        help="Path to rubric JSON. Defaults to the bundled package rubric.",
     )
     parser.add_argument(
         "--roles",
         type=str,
-        default=str(Path("config/roles.json")),
-        help="Path to roles JSON.",
+        default=None,
+        help="Path to roles JSON. Defaults to the bundled package roles.",
     )
     parser.add_argument(
         "--engine",
@@ -173,7 +224,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--gap-threshold",
         type=float,
-        default=0.5,
+        default=1.0,
         help="Disagreement threshold: flag dimension if max-min >= threshold.",
     )
     parser.add_argument(
@@ -185,15 +236,17 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pretty", action="store_true", help="Pretty JSON output (json format only)."
     )
+    parser.add_argument(
+        "--include-summary",
+        action="store_true",
+        help="Include raw summary text in JSON output. Disabled by default for privacy.",
+    )
     parser.add_argument("--output", type=str, help="Write output JSON to this file.")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry point.  Parses args, runs the pipeline, and prints output.
-
-    Returns 0 on success, 2 on input validation errors.
-    """
+    """CLI entry point. Parses args, runs the pipeline, and prints output."""
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -203,42 +256,52 @@ def main(argv: Sequence[str] | None = None) -> int:
         source_text = _validate_source(source_text)
         if source_text is not None and args.engine != "llm":
             raise ValueError(SOURCE_GROUNDED_REQUIRES_LLM_ERROR)
+        rubric, roles, config_meta = _load_runtime_config(args)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(2) from exc
+    except OSError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
-    rubric = load_rubric(args.rubric)
-    roles = load_roles(args.roles, rubric.dimension_ids)
-
-    result = asyncio.run(
-        run_pipeline(
-            summary,
-            args.engine,
-            args.format,
-            rubric=rubric,
-            roles=roles,
-            model=args.model,
-            temperature=args.temperature,
-            gap_threshold=args.gap_threshold,
-            max_retries=2,
-            source_text=source_text,
+    try:
+        result = asyncio.run(
+            run_pipeline(
+                summary,
+                args.engine,
+                args.format,
+                rubric=rubric,
+                roles=roles,
+                model=args.model,
+                temperature=args.temperature,
+                gap_threshold=args.gap_threshold,
+                max_retries=2,
+                source_text=source_text,
+            )
         )
-    )
+    except Exception as exc:
+        print(f"Pipeline error: {exc}", file=sys.stderr)
+        return 1
 
     if args.format == "human":
         _print_human(result, rubric)
         return 0
 
-    payload = {
-        "summary": summary,
+    payload: Dict[str, Any] = {
+        "summary_metadata": _summarize_summary_input(summary, include_text=args.include_summary),
         "source": _summarize_source_input(args, source_text, source_metadata),
         "rubric_id": rubric.rubric_id,
+        "config": config_meta,
         **result,
     }
 
     output = json.dumps(payload, indent=2 if args.pretty else None)
     if args.output:
-        Path(args.output).write_text(output)
+        try:
+            Path(args.output).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"Error writing output file: {exc}", file=sys.stderr)
+            return 1
     print(output)
     return 0
 

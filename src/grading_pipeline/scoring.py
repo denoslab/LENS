@@ -23,6 +23,9 @@ from typing import Any, Dict, List, Tuple
 from .config import RoleProfile, Rubric
 
 
+SOURCE_SIGNAL_LIST_MAX_ITEMS = 5
+
+
 @dataclass(frozen=True)
 class AgentScore:
     """Container for a single role's scoring output.
@@ -39,6 +42,7 @@ class AgentScore:
             evaluation (None in summary-only mode). Keys:
             ``wrong_patient_suspected`` (bool),
             ``unsupported_claims`` (list[str]),
+            ``contradicted_claims`` (list[str]),
             ``omitted_safety_facts`` (list[str]).
     """
     role_id: str
@@ -54,7 +58,6 @@ class AgentScore:
         payload = {
             "role_id": self.role_id,
             "scores": self.scores,
-            "score": self.scores,
         }
         if self.rationales is not None:
             payload["rationales"] = self.rationales
@@ -69,6 +72,43 @@ class AgentScore:
         if self.source_grounded_signals is not None:
             payload["source_grounded_signals"] = self.source_grounded_signals
         return payload
+
+
+def normalize_source_grounded_signals(payload: Any) -> Dict[str, Any]:
+    """Validate and coerce a ``source_grounded_signals`` payload.
+
+    Returns a normalized dict with:
+    - ``wrong_patient_suspected``: bool
+    - ``unsupported_claims``: list[str]
+    - ``contradicted_claims``: list[str]
+    - ``omitted_safety_facts``: list[str]
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("source_grounded_signals must be an object.")
+
+    if "wrong_patient_suspected" not in payload:
+        raise ValueError(
+            "source_grounded_signals missing 'wrong_patient_suspected'."
+        )
+    wrong_patient = payload["wrong_patient_suspected"]
+    if not isinstance(wrong_patient, bool):
+        raise ValueError(
+            "source_grounded_signals.wrong_patient_suspected must be a boolean."
+        )
+
+    def _coerce_list(key: str) -> List[str]:
+        value = payload.get(key)
+        if not isinstance(value, list):
+            raise ValueError(f"source_grounded_signals.{key} must be a list.")
+        cleaned = [str(item).strip() for item in value]
+        return [item for item in cleaned if item][:SOURCE_SIGNAL_LIST_MAX_ITEMS]
+
+    return {
+        "wrong_patient_suspected": wrong_patient,
+        "unsupported_claims": _coerce_list("unsupported_claims"),
+        "contradicted_claims": _coerce_list("contradicted_claims"),
+        "omitted_safety_facts": _coerce_list("omitted_safety_facts"),
+    }
 
 
 # ---------------------------------------------------------------------------

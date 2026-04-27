@@ -13,251 +13,255 @@
 
 📖 **[Full API documentation](https://denoslab.github.io/LENS/)**
 
-LENS is a role-aware multi-agent grading pipeline for clinical summaries. The same summary is scored in parallel by three role-specific agents:
+LENS is a role-aware multi-agent grading pipeline for evaluating AI-generated clinical summaries in Emergency Department workflows. The same summary is reviewed from three clinical perspectives:
 
 - `Physician`
 - `Triage Nurse`
 - `Bedside Nurse`
 
-Each role scores the summary across 8 rubric dimensions on a `1-5` scale. The system then computes a role-level weighted overall score, a cross-role overall score, and an `Orchestrator Disagreement` view that shows how far the three role scores differ on each dimension.
+Each role scores the summary on eight rubric dimensions. LENS preserves per-role scorecards, measures cross-role disagreement, optionally adjudicates disputed dimensions, and reports an overall score.
 
 ## Core Capabilities
 
-- Parallel scoring by three role-specific agents
+- Parallel scoring by three role-specific evaluators
 - Shared 8-dimension LENS rubric
 - Two scoring modes:
   - `llm`: OpenAI model-based scoring
   - `heuristic`: local baseline scoring without API calls
-- Per-role weighted overall scoring based on questionnaire-derived role priors
-- Orchestrator validation, disagreement mapping, and score aggregation
+- Role-specific weighting based on questionnaire-derived priors
+- Validation, disagreement mapping, and aggregation
+- Summary-only and source-grounded evaluation modes
 - Human-readable and JSON outputs
-- Optional source-grounded evaluation with `--source-text` or `--source-file`
+- External benchmark runner for Phase 2 source-grounded experiments
 
-## Pipeline Overview
+## Installation Modes
 
-1. Input a clinical summary.
-2. Load rubric definitions and role configurations.
-3. Run the three role agents in parallel.
-4. Validate each role scorecard.
-5. Build an `Orchestrator Disagreement` map for all 8 dimensions.
-6. Aggregate the role outputs into:
-   - per-role scores
-   - per-role overall scores
-   - final overall score across roles
-
-## Repository Structure
-
-- `src/grading_pipeline/`
-  Python package (published on PyPI as **`edlens`**).
-  - `cli.py` — Command-line entrypoint and human-readable output formatting
-  - `orchestrator.py` — Multi-agent pipeline, validation, disagreement mapping, and aggregation
-  - `llm_scoring.py` — LLM-based scoring logic
-  - `scoring.py` — Heuristic baseline scoring and score utilities
-  - `openai_client.py` — Minimal OpenAI Responses API client
-  - `config.py` — Rubric/role configuration loaders
-  - `validation.py` — Input validation
-- `config/`
-  - `lens_rubric.json` — 8 rubric dimensions and evaluation focus
-  - `roles.json` — Role agents, persona metadata, and `w_prior` weights
-  - `role_profiles/` — Role-specific LLM scoring profiles
-- `schemas/`
-  - `agent_output.schema.json` — JSON Schema for structured agent output
-- `docs/` — API reference (mkdocs + mkdocs-material)
-- `tests/` — Input-validation and orchestrator tests
-- `Dockerfile` — Container image for running the pipeline
-
-## Requirements
-
-- Python 3.12+
-- OpenAI API key for `llm` mode
-
-### Installation
+### 1. Installed package
 
 ```bash
 pip install edlens
 ```
 
-Or install from source with dev and docs extras:
+This mode uses the **bundled default rubric, roles, and role profiles** packaged with `edlens`.
+
+### 2. Editable development install
 
 ```bash
 pip install -e ".[dev,docs]"
 ```
 
+This mode is recommended if you want to modify prompts, configs, or benchmark scripts.
+
 The package has no runtime dependencies beyond the Python standard library.
+
+## Configuration Resolution
+
+By default, the CLI loads bundled package resources for:
+
+- the LENS rubric
+- the 3 role definitions
+- the role-specific prompt profiles
+
+You can override them with:
+
+- `--rubric path/to/lens_rubric.json`
+- `--roles path/to/roles.json`
 
 ## API Key Setup
 
-If you want to run the LLM pipeline, you must use **your own OpenAI API key**.
+LLM mode requires your own OpenAI API key.
 
-Create a file named `.env` in the **project root**.
+Preferred setup:
 
-Project root:
-- same folder as `README.md`
-- same folder as `config/`
-- same folder as `grading_pipeline/`
-
-Expected file location:
 ```bash
-LENS Project/.env
+export OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-Add the following line to `.env`:
-```bash
-OPENAI_API_KEY=your_openai_api_key_here
-```
+Optional `.env` support is also available. LENS checks:
 
-Optional override:
-```bash
-OPENAI_BASE_URL=https://api.openai.com/v1/responses
-```
+1. `OPENAI_API_KEY` in the current shell environment
+2. `.env` in the current working directory
+3. `.env` in the repo root when running from a checkout
 
-You can use `.env.example` as the template:
+Optional timeout override:
+
 ```bash
-cp .env.example .env
+export LENS_OPENAI_TIMEOUT_SECONDS=60
 ```
 
 Important notes:
-- `.env` is already ignored by git and should not be committed.
-- If you run with `--engine heuristic`, no API key is required.
-- The code reads `OPENAI_API_KEY` from `.env` first, then falls back to your shell environment.
+
+- `.env` should never be committed
+- `heuristic` mode does not require an API key
+- the default OpenAI endpoint is `https://api.openai.com/v1/responses`
 
 ## Quick Start
 
 Run with the default LLM mode:
+
 ```bash
 python -m grading_pipeline --summary "Your summary here"
-# or, using the installed CLI entry point:
+# or
 lens --summary "Your summary here"
 ```
 
 Run with the heuristic baseline:
+
 ```bash
 lens --engine heuristic --summary "Your summary here"
 ```
 
 Use a summary file:
+
 ```bash
 lens --summary-file path/to/summary.txt
 ```
 
-Run in source-grounded mode with a source packet or source record:
+Run in source-grounded mode:
+
 ```bash
-lens --summary-file path/to/summary.txt --source-file path/to/source_packet.txt --engine llm
+lens --summary-file path/to/summary.txt --source-file path/to/source_packet.json --engine llm
 ```
 
-Output JSON instead of the human-readable report:
+Output JSON:
+
 ```bash
 lens --summary "Your summary here" --format json --pretty
 ```
 
-Select a specific model:
+Include raw summary text in JSON output only when you explicitly want it:
+
 ```bash
-lens --model gpt-4o-mini --summary "Your summary here"
+lens --summary "Your summary here" --format json --include-summary
 ```
 
 Adjust the disagreement threshold:
-```bash
-lens --gap-threshold 0.5 --summary "Your summary here"
-```
-
-### Docker
 
 ```bash
-docker build -t lens .
-docker run lens --summary "Your summary here" --engine heuristic
+lens --gap-threshold 1.0 --summary "Your summary here"
 ```
 
-## Input Rules
+## Source-Grounded Evaluation
 
-The CLI validates summary input before the scoring pipeline runs.
+When `--source-text` or `--source-file` is provided, LENS switches into **source-grounded evaluation**. The LLM is asked to compare the summary against the patient source record or source packet.
 
-The summary must:
-- be provided through `--summary` or `--summary-file`
-- not be empty
-- not be whitespace only
-- be at least `30` characters after trimming whitespace
+The source-grounded output distinguishes between:
 
-If the summary is invalid, the CLI exits with a non-zero code and no scoring call is made.
+- `unsupported_claims`: the summary says something the source does not support
+- `contradicted_claims`: the summary says something that conflicts with the source
+- `omitted_safety_facts`: safety-critical source facts are missing from the summary
+- `wrong_patient_suspected`: the summary may describe a different patient
 
-## Output
+This mode is intended to evaluate whether a summary is faithful to patient-specific information, not only whether it sounds clinically plausible.
 
-The human-readable output includes:
-- role-by-role scores for all 8 dimensions
-- a weighted `Overall` score for each role
-- `Orchestrator Disagreement` showing score gaps per dimension
-- final `Overall Score` across all three roles
+## Privacy and Sensitive Text Handling
 
-Example output shape:
+By default, JSON output does **not** echo raw source text or raw summary text.
+
+Instead, LENS stores lightweight metadata such as:
+
+- character count
+- SHA-256 hash
+- source format metadata
+
+Use `--include-summary` only when you explicitly want raw summary text in the saved output.
+
+## Output Structure
+
+The main JSON output includes:
+
+- `per_role_scorecards`
+- `disagreement_map`
+- `adjudication_ran`
+- `overall_across_roles`
+- `source_grounded_summary` when source-grounded mode is used
+- `meta`
+
+The `meta` block records run context such as:
+
+- scoring model
+- adjudicator model
+- disagreement threshold
+- evaluation context (`summary_only` or `source_grounded`)
+- source truncation metadata when applicable
+
+## Disagreement and Aggregation
+
+LENS computes disagreement **per dimension** using:
+
 ```text
-----------------------------------------
-Role-Aware Multi-Agent Grading Pipeline:
-----------------------------------------
-Physician:
-Factual Accuracy: 5.0
-Relevant Chronic Problem Coverage: 4.0
-...
-
-Overall: 4.12
-----------------------------------------
-Triage Nurse:
-...
-----------------------------------------
-Bedside Nurse:
-...
-----------------------------------------
-----------------------------------------
-Orchestrator Disagreement:
-----------------------------------------
-Factual Accuracy: 1.0
-Relevant Chronic Problem Coverage: 0.0
-...
-----------------------------------------
-Overall Score: 4.0
+score gap = max(role scores) - min(role scores)
 ```
 
-## Scoring Logic
+The CLI default is:
 
-Each role has its own prior weights in `config/roles.json`.
+```text
+gap threshold = 1.0
+```
+
+That means adjudication is triggered when at least one rubric dimension differs by 1 point or more across roles.
 
 Role-level overall score:
+
 ```text
 Role Overall = weighted average of the 8 dimension scores
 ```
 
 Cross-role overall score:
+
 ```text
-Overall Score = average of the 3 role overall scores
+Overall Score = average of the 3 role overalls
 ```
 
-Disagreement per dimension:
-```text
-Gap = highest agent score - lowest agent score
+## Benchmark Runner
+
+Phase 2 includes an external source-grounded benchmark runner:
+
+- manifest: `data/phase2/benchmarks/source_grounded_demo/manifest.json`
+- runner: `scripts/run_source_grounded_benchmark.py`
+
+Example:
+
+```bash
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --pretty
 ```
+
+Outputs include:
+
+- raw per-variant JSON outputs
+- `summary.csv`
+- `report.md`
+- `run_meta.json`
+
+The benchmark report records:
+
+- timestamp
+- git SHA when available
+- model name
+- rubric / roles / manifest hashes
+- attempted / completed / skipped / failed counts
 
 ## Testing
 
-Run the test suite:
+Run the full test suite:
+
 ```bash
 pytest -q
 ```
 
-Current tests cover:
-- CLI summary input validation
-- disagreement-map correctness
-- validation and repair behavior
-- conditional adjudication behavior
-- weighted aggregation behavior
+## Limitations
 
-## Current Status
+- `heuristic` mode is a baseline only; it is not a clinically grounded evaluator
+- source packets are distilled representations, not the full EHR
+- source-grounded scoring improves faithfulness checks, but it is still an LLM judgment layer rather than ground-truth clinical verification
+- `calibrate_weights()` currently normalizes role priors only; it does **not** implement learned bounded calibration yet
 
-The current implementation includes:
-- parallel three-role scoring
-- role-aware weighting
-- strict input validation
-- orchestrator disagreement reporting
-- weighted final score aggregation
-- human-readable report formatting for demo and presentation use
+## Repository Structure
 
-
-Source packet JSON files are auto-rendered into a compact narrative before source-grounded scoring.
-See `/Users/samuel/Documents/LENS Project/data/phase2/benchmarks/source_grounded_demo/manifest.json` and `/Users/samuel/Documents/LENS Project/scripts/run_source_grounded_benchmark.py` for the Phase 2 scaffold.
+- `src/grading_pipeline/` — core package
+- `src/grading_pipeline/defaults/` — bundled default rubric, roles, and role profiles
+- `config/` — editable repo-local config copies
+- `schemas/` — checked-in output and source packet schemas
+- `scripts/` — experiment runners and utilities
+- `docs/` — MkDocs site content
+- `tests/` — unit and integration tests

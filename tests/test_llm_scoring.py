@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from grading_pipeline.llm_scoring import (
     DEFAULT_MAX_SOURCE_CHARS,
     SOURCE_TRUNCATION_NOTICE,
     _build_model_input,
+    _build_score_schema,
     _truncate_source,
     score_summary_llm,
 )
@@ -23,9 +25,22 @@ def _load_config():
     return rubric, roles[0]
 
 
+def test_runtime_schema_matches_checked_in_schema() -> None:
+    rubric, _ = _load_config()
+    summary_only_schema = json.loads((PROJECT_ROOT / "schemas" / "agent_output.schema.json").read_text())
+    source_grounded_schema = json.loads((PROJECT_ROOT / "schemas" / "agent_output_source_grounded.schema.json").read_text())
+
+    for schema in (summary_only_schema, source_grounded_schema):
+        schema.pop("$schema", None)
+        schema.pop("title", None)
+
+    assert _build_score_schema(rubric, source_grounded=False) == summary_only_schema
+    assert _build_score_schema(rubric, source_grounded=True) == source_grounded_schema
+
+
 def test_score_summary_llm_returns_rationales_and_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
     rubric, role = _load_config()
-    score = {dim_id: 3 for dim_id in rubric.dimension_ids}
+    scores = {dim_id: 3 for dim_id in rubric.dimension_ids}
     rationales = {dim_id: f"rationale for {dim_id}" for dim_id in rubric.dimension_ids}
     evidence = {dim_id: [f"evidence for {dim_id}"] for dim_id in rubric.dimension_ids}
 
@@ -37,12 +52,13 @@ def test_score_summary_llm_returns_rationales_and_evidence(monkeypatch: pytest.M
         "grading_pipeline.llm_scoring.extract_json_output",
         lambda response: {
             "role_id": role.id,
-            "score": score,
+            "scores": scores,
             "rationales": rationales,
             "evidence": evidence,
             "source_grounded_signals": {
                 "wrong_patient_suspected": False,
                 "unsupported_claims": [],
+                "contradicted_claims": [],
                 "omitted_safety_facts": [],
             },
         },
@@ -62,15 +78,14 @@ def test_score_summary_llm_returns_rationales_and_evidence(monkeypatch: pytest.M
     assert result.source_grounded_signals == {
         "wrong_patient_suspected": False,
         "unsupported_claims": [],
+        "contradicted_claims": [],
         "omitted_safety_facts": [],
     }
 
 
 def test_score_summary_llm_parses_structured_signals(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Signals returned by the LLM must be exposed on the AgentScore, with
-    blank entries pruned and lists capped at 5 items."""
     rubric, role = _load_config()
-    score = {dim_id: 3 for dim_id in rubric.dimension_ids}
+    scores = {dim_id: 3 for dim_id in rubric.dimension_ids}
     rationales = {dim_id: "r" for dim_id in rubric.dimension_ids}
     evidence = {dim_id: ["e"] for dim_id in rubric.dimension_ids}
 
@@ -82,12 +97,13 @@ def test_score_summary_llm_parses_structured_signals(monkeypatch: pytest.MonkeyP
         "grading_pipeline.llm_scoring.extract_json_output",
         lambda response: {
             "role_id": role.id,
-            "score": score,
+            "scores": scores,
             "rationales": rationales,
             "evidence": evidence,
             "source_grounded_signals": {
                 "wrong_patient_suspected": True,
                 "unsupported_claims": ["claim 1", "", "  ", "claim 2"],
+                "contradicted_claims": [f"contradiction {i}" for i in range(7)],
                 "omitted_safety_facts": [f"fact {i}" for i in range(7)],
             },
         },
@@ -104,6 +120,7 @@ def test_score_summary_llm_parses_structured_signals(monkeypatch: pytest.MonkeyP
     assert result.source_grounded_signals is not None
     assert result.source_grounded_signals["wrong_patient_suspected"] is True
     assert result.source_grounded_signals["unsupported_claims"] == ["claim 1", "claim 2"]
+    assert len(result.source_grounded_signals["contradicted_claims"]) == 5
     assert len(result.source_grounded_signals["omitted_safety_facts"]) == 5
 
 
@@ -111,7 +128,7 @@ def test_score_summary_llm_rejects_missing_signals_when_source_grounded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     rubric, role = _load_config()
-    score = {dim_id: 3 for dim_id in rubric.dimension_ids}
+    scores = {dim_id: 3 for dim_id in rubric.dimension_ids}
     rationales = {dim_id: "r" for dim_id in rubric.dimension_ids}
     evidence = {dim_id: ["e"] for dim_id in rubric.dimension_ids}
 
@@ -123,7 +140,7 @@ def test_score_summary_llm_rejects_missing_signals_when_source_grounded(
         "grading_pipeline.llm_scoring.extract_json_output",
         lambda response: {
             "role_id": role.id,
-            "score": score,
+            "scores": scores,
             "rationales": rationales,
             "evidence": evidence,
         },
@@ -135,6 +152,32 @@ def test_score_summary_llm_rejects_missing_signals_when_source_grounded(
             role,
             rubric,
             source_text="Source packet with matching clinical detail.",
+            model="test-model",
+        )
+
+
+def test_score_summary_llm_rejects_role_id_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    rubric, role = _load_config()
+    scores = {dim_id: 3 for dim_id in rubric.dimension_ids}
+    rationales = {dim_id: "r" for dim_id in rubric.dimension_ids}
+    evidence = {dim_id: ["e"] for dim_id in rubric.dimension_ids}
+
+    monkeypatch.setattr("grading_pipeline.llm_scoring.create_response", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        "grading_pipeline.llm_scoring.extract_json_output",
+        lambda response: {
+            "role_id": "triage_nurse",
+            "scores": scores,
+            "rationales": rationales,
+            "evidence": evidence,
+        },
+    )
+
+    with pytest.raises(Exception, match="mismatched role_id"):
+        score_summary_llm(
+            "Patient summary with enough detail for testing.",
+            role,
+            rubric,
             model="test-model",
         )
 
@@ -172,7 +215,7 @@ def test_truncate_source_noop_when_under_budget() -> None:
 
 def test_score_summary_llm_rejects_missing_rationales(monkeypatch: pytest.MonkeyPatch) -> None:
     rubric, role = _load_config()
-    score = {dim_id: 3 for dim_id in rubric.dimension_ids}
+    scores = {dim_id: 3 for dim_id in rubric.dimension_ids}
     evidence = {dim_id: [f"evidence for {dim_id}"] for dim_id in rubric.dimension_ids}
 
     monkeypatch.setattr(
@@ -183,7 +226,7 @@ def test_score_summary_llm_rejects_missing_rationales(monkeypatch: pytest.Monkey
         "grading_pipeline.llm_scoring.extract_json_output",
         lambda response: {
             "role_id": role.id,
-            "score": score,
+            "scores": scores,
             "evidence": evidence,
         },
     )
