@@ -2,8 +2,9 @@
 
 This script is intentionally an external experiment runner: each benchmark
 variant is scored by invoking ``python -m grading_pipeline`` with
-``--summary-file`` and ``--source-file``. That keeps Phase 2 results aligned
-with the same public workflow users run from the terminal.
+``--summary-file`` and, for source-grounded runs, ``--source-file``. That
+keeps Phase 2 results aligned with the same public workflow users run from
+the terminal.
 """
 
 from __future__ import annotations
@@ -25,9 +26,12 @@ from typing import Any, Dict, Iterable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = PROJECT_ROOT / "data/phase2/benchmarks/source_grounded_demo/manifest.json"
-DEFAULT_OUTDIR = PROJECT_ROOT / "reports/phase2/source_grounded_demo"
+DEFAULT_OUTDIR_SOURCE_GROUNDED = PROJECT_ROOT / "reports/phase2/source_grounded_demo"
+DEFAULT_OUTDIR_SUMMARY_ONLY = PROJECT_ROOT / "reports/phase2/source_grounded_demo_summary_only"
 DEFAULT_RUBRIC = PROJECT_ROOT / "config/lens_rubric.json"
 DEFAULT_ROLES = PROJECT_ROOT / "config/roles.json"
+DEFAULT_EVALUATION_CONTEXT = "source_grounded"
+DEFAULT_TEMPERATURE = 0.0
 DIMENSION_IDS = [
     "factual_accuracy",
     "relevant_chronic_problem_coverage",
@@ -126,6 +130,51 @@ def _preview_text(text: str, *, max_chars: int = ERROR_PREVIEW_CHARS) -> str:
     return cleaned[:max_chars] + "..."
 
 
+def _default_outdir_for_context(evaluation_context: str) -> Path:
+    if evaluation_context == "source_grounded":
+        return DEFAULT_OUTDIR_SOURCE_GROUNDED
+    if evaluation_context == "summary_only":
+        return DEFAULT_OUTDIR_SUMMARY_ONLY
+    raise ValueError(f"Unsupported evaluation context: {evaluation_context}")
+
+
+def _build_cli_command(
+    summary_file: Path,
+    source_file: Path,
+    *,
+    model: str,
+    python_bin: str,
+    rubric: Path,
+    roles: Path,
+    evaluation_context: str,
+    temperature: float,
+) -> list[str]:
+    command = [
+        python_bin,
+        "-m",
+        "grading_pipeline",
+        "--engine",
+        "llm",
+        "--model",
+        model,
+        "--temperature",
+        str(temperature),
+        "--format",
+        "json",
+        "--summary-file",
+        str(summary_file),
+        "--rubric",
+        str(rubric),
+        "--roles",
+        str(roles),
+    ]
+    if evaluation_context == "source_grounded":
+        command.extend(["--source-file", str(source_file)])
+    elif evaluation_context != "summary_only":
+        raise ValueError(f"Unsupported evaluation context: {evaluation_context}")
+    return command
+
+
 def _run_cli(
     summary_file: Path,
     source_file: Path,
@@ -134,6 +183,8 @@ def _run_cli(
     python_bin: str,
     rubric: Path,
     roles: Path,
+    evaluation_context: str,
+    temperature: float,
 ) -> subprocess.CompletedProcess[str]:
     """Run the existing CLI for one benchmark variant."""
     env = dict(os.environ)
@@ -145,25 +196,16 @@ def _run_cli(
         else src_path
     )
     return subprocess.run(
-        [
-            python_bin,
-            "-m",
-            "grading_pipeline",
-            "--engine",
-            "llm",
-            "--model",
-            model,
-            "--format",
-            "json",
-            "--summary-file",
-            str(summary_file),
-            "--source-file",
-            str(source_file),
-            "--rubric",
-            str(rubric),
-            "--roles",
-            str(roles),
-        ],
+        _build_cli_command(
+            summary_file,
+            source_file,
+            model=model,
+            python_bin=python_bin,
+            rubric=rubric,
+            roles=roles,
+            evaluation_context=evaluation_context,
+            temperature=temperature,
+        ),
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
@@ -326,13 +368,24 @@ def _write_report(
         else 0.0
     )
 
+    evaluation_context = run_meta.get("evaluation_context", DEFAULT_EVALUATION_CONTEXT)
+    benchmark_label = "Source-Grounded" if evaluation_context == "source_grounded" else "Summary-Only"
+    mismatch_signal_display = (
+        f"`{mismatch_signal_rate}`" if evaluation_context == "source_grounded" else "`N/A (summary-only run)`"
+    )
+    omission_signal_display = (
+        f"`{omission_signal_rate}`" if evaluation_context == "source_grounded" else "`N/A (summary-only run)`"
+    )
+
     lines = [
-        f"# Source-Grounded Benchmark Report: {manifest_name}",
+        f"# {benchmark_label} Benchmark Report: {manifest_name}",
         "",
         "## Run Metadata",
         f"- Timestamp (UTC): `{run_meta['timestamp_utc']}`",
         f"- Git SHA: `{run_meta.get('git_sha') or 'unknown'}`",
+        f"- Evaluation context: `{evaluation_context}`",
         f"- Model: `{run_meta['model']}`",
+        f"- Temperature: `{run_meta['temperature']}`",
         f"- Rubric: `{run_meta['rubric_path']}` (sha256 `{run_meta['rubric_sha256']}`)",
         f"- Roles: `{run_meta['roles_path']}` (sha256 `{run_meta['roles_sha256']}`)",
         f"- Manifest: `{run_meta['manifest_path']}` (sha256 `{run_meta['manifest_sha256']}`)",
@@ -351,8 +404,8 @@ def _write_report(
         f"- Mean overall delta vs reference (degraded variants only): `{overall_mean_delta}`",
         f"- Mean hit rate (wrong-patient mismatch, score-based): `{mismatch_hit_rate}`",
         f"- Mean hit rate (safety-critical omission, score-based): `{omission_hit_rate}`",
-        f"- Wrong-patient signal rate (LLM flagged): `{mismatch_signal_rate}`",
-        f"- Safety-omission signal rate (LLM flagged >=1 fact): `{omission_signal_rate}`",
+        f"- Wrong-patient signal rate (LLM flagged): {mismatch_signal_display}",
+        f"- Safety-omission signal rate (LLM flagged >=1 fact): {omission_signal_display}",
     ]
 
     if stats.skipped_cases:
@@ -384,7 +437,7 @@ def _run_benchmark(
     args: argparse.Namespace,
     cases: list[Case],
 ) -> tuple[list[dict[str, Any]], BenchmarkStats]:
-    outdir = Path(args.outdir)
+    outdir = _default_outdir_for_context(args.evaluation_context) if args.outdir is None else Path(args.outdir)
     outputs_dir = outdir / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -411,6 +464,8 @@ def _run_benchmark(
                 python_bin=args.python_bin,
                 rubric=Path(args.rubric),
                 roles=Path(args.roles),
+                evaluation_context=args.evaluation_context,
+                temperature=args.temperature,
             )
             if result.returncode != 0:
                 _write_error_log(error_path, case=case, variant=variant, result=result)
@@ -458,8 +513,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to benchmark manifest JSON.")
     parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument(
+        "--evaluation-context",
+        choices=["source_grounded", "summary_only"],
+        default=DEFAULT_EVALUATION_CONTEXT,
+        help="Whether to compare summaries against source packets or run the same benchmark in summary-only mode.",
+    )
     parser.add_argument("--python-bin", default=sys.executable)
-    parser.add_argument("--outdir", default=str(DEFAULT_OUTDIR))
+    parser.add_argument(
+        "--outdir",
+        default=None,
+        help="Output directory. Defaults depend on evaluation context.",
+    )
     parser.add_argument("--rubric", default=str(DEFAULT_RUBRIC))
     parser.add_argument("--roles", default=str(DEFAULT_ROLES))
     parser.add_argument("--sleep-seconds", type=float, default=0.5)
@@ -474,12 +540,14 @@ def main(argv: list[str] | None = None) -> int:
 
     summary_rows, stats = _run_benchmark(args, cases)
 
-    outdir = Path(args.outdir)
+    outdir = _default_outdir_for_context(args.evaluation_context) if args.outdir is None else Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     run_meta = {
         "timestamp_utc": _utc_now_iso(),
         "git_sha": _current_git_sha(),
         "model": args.model,
+        "temperature": args.temperature,
+        "evaluation_context": args.evaluation_context,
         "python_bin": args.python_bin,
         "manifest_path": str(Path(args.manifest).resolve()),
         "manifest_sha256": _sha256_file(Path(args.manifest)),

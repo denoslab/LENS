@@ -7,6 +7,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.run_source_grounded_benchmark import (
     BenchmarkStats,
+    _build_cli_command,
     _summarize_case,
     _write_report,
     load_manifest,
@@ -24,6 +25,37 @@ def test_load_manifest_resolves_case_files() -> None:
             assert variant.summary_file.exists(), (
                 f"missing summary for {case.case_id}/{variant.variant_id}"
             )
+
+
+def test_build_cli_command_supports_context_and_temperature() -> None:
+    source_file = PROJECT_ROOT / "data/phase2/benchmarks/source_grounded_demo/cases/case_001/source_packet.json"
+    summary_file = PROJECT_ROOT / "data/phase2/benchmarks/source_grounded_demo/cases/case_001/reference_summary.txt"
+
+    source_grounded_cmd = _build_cli_command(
+        summary_file,
+        source_file,
+        model="gpt-4o-mini",
+        python_bin=sys.executable,
+        rubric=PROJECT_ROOT / "config/lens_rubric.json",
+        roles=PROJECT_ROOT / "config/roles.json",
+        evaluation_context="source_grounded",
+        temperature=0.0,
+    )
+    summary_only_cmd = _build_cli_command(
+        summary_file,
+        source_file,
+        model="gpt-4o-mini",
+        python_bin=sys.executable,
+        rubric=PROJECT_ROOT / "config/lens_rubric.json",
+        roles=PROJECT_ROOT / "config/roles.json",
+        evaluation_context="summary_only",
+        temperature=0.0,
+    )
+
+    assert "--temperature" in source_grounded_cmd
+    assert "0.0" in source_grounded_cmd
+    assert "--source-file" in source_grounded_cmd
+    assert "--source-file" not in summary_only_cmd
 
 
 def test_summarize_case_counts_hits_against_reference() -> None:
@@ -164,6 +196,8 @@ def test_write_report_records_metadata_and_failures(tmp_path: Path) -> None:
         "timestamp_utc": "2026-04-27T00:00:00+00:00",
         "git_sha": "abc123",
         "model": "gpt-4o-mini",
+        "temperature": 0.0,
+        "evaluation_context": "source_grounded",
         "manifest_path": "/tmp/manifest.json",
         "manifest_sha256": "mhash",
         "rubric_path": "/tmp/rubric.json",
@@ -186,6 +220,8 @@ def test_write_report_records_metadata_and_failures(tmp_path: Path) -> None:
     report = report_path.read_text(encoding="utf-8")
 
     assert "Timestamp (UTC): `2026-04-27T00:00:00+00:00`" in report
+    assert "Evaluation context: `source_grounded`" in report
+    assert "Temperature: `0.0`" in report
     assert "Completed reference variants: `1`" in report
     assert "Completed degraded test variants: `2`" in report
     assert "Mean overall delta vs reference (degraded variants only): `1.5`" in report

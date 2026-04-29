@@ -133,6 +133,8 @@ def test_conditional_adjudication_in_llm_mode() -> None:
 
     assert no_gap_result["adjudication_ran"] is False
     assert adjudicator_calls["count"] == 0
+    assert no_gap_result["disputed_dimensions"] == []
+    assert no_gap_result["initial_disagreement_map"]["factual_accuracy"]["flag"] is False
 
     disputed_physician = dict(no_gap_scores)
     disputed_triage = dict(no_gap_scores)
@@ -175,6 +177,15 @@ def test_conditional_adjudication_in_llm_mode() -> None:
 
     assert with_gap_result["adjudication_ran"] is True
     assert adjudicator_calls["count"] == 1
+    assert with_gap_result["disputed_dimensions"] == ["factual_accuracy"]
+    assert with_gap_result["initial_disagreement_map"]["factual_accuracy"]["flag"] is True
+
+    pre_by_role = {
+        card["role_id"]: card for card in with_gap_result["pre_adjudication_scorecards"]
+    }
+    assert pre_by_role["physician"]["scores"]["factual_accuracy"] == 5.0
+    assert pre_by_role["triage_nurse"]["scores"]["factual_accuracy"] == 3.0
+    assert pre_by_role["bedside_nurse"]["scores"]["factual_accuracy"] == 2.0
 
     by_role = {
         card["role_id"]: card for card in with_gap_result["per_role_scorecards"]

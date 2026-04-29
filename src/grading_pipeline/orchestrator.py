@@ -16,6 +16,7 @@ Pipeline stages:
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import inspect
 from statistics import mean
@@ -537,7 +538,9 @@ async def run_pipeline(
 
     Returns:
         Dict with keys: ``per_role_scorecards``, ``disagreement_map``,
-        ``adjudication_ran``, ``overall_across_roles``, ``meta``.
+        ``initial_disagreement_map``, ``pre_adjudication_scorecards``,
+        ``disputed_dimensions``, ``adjudication_ran``,
+        ``overall_across_roles``, ``meta``.
     """
     if mode not in {"llm", "heuristic"}:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -641,6 +644,9 @@ async def run_pipeline(
                 repaired, roles_by_id[role_id]
             )
 
+    pre_adjudication_scorecards = [
+        copy.deepcopy(scorecards_by_role_id[role_id]) for role_id in CANONICAL_ROLE_IDS
+    ]
     initial_disagreement_map = build_disagreement_map(scorecards_by_role_id, gap_threshold)
     disputed_dims = [
         dim for dim, item in initial_disagreement_map.items() if item["flag"]
@@ -712,6 +718,9 @@ async def run_pipeline(
     ]
 
     result: Dict[str, Any] = {
+        "pre_adjudication_scorecards": pre_adjudication_scorecards,
+        "initial_disagreement_map": initial_disagreement_map,
+        "disputed_dimensions": disputed_dims,
         "per_role_scorecards": per_role_scorecards,
         "disagreement_map": disagreement_map,
         "adjudication_ran": adjudication_ran,
@@ -728,6 +737,7 @@ async def run_pipeline(
         "scoring_model": model,
         "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
         "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
+        "initial_disputed_dimensions_count": len(disputed_dims),
         "source_text_provided": checked_source is not None,
         "source_truncated": source_prep.truncated if source_prep is not None else False,
         "source_original_chars": source_prep.original_chars if source_prep is not None else None,
