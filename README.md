@@ -13,6 +13,8 @@
 
 📖 **[Full API documentation](https://denoslab.github.io/LENS/)**
 
+Phase 1 experiment reproduction guide: `docs/phase1_experiment_reproduction.md`.
+
 LENS is a role-aware multi-agent grading pipeline for clinical summaries. The same summary is scored in parallel by three role-specific agents:
 
 - `Physician`
