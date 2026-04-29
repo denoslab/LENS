@@ -77,10 +77,16 @@ The repo includes a local development scaffold for Phase 2:
 - manifest: `data/phase2/benchmarks/source_grounded_demo/manifest.json`
 - runner: `scripts/run_source_grounded_benchmark.py`
 
-Run it with:
+Run the source-grounded pilot with:
 
 ```bash
-python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --pretty
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --temperature 0.0 --pretty
+```
+
+Run the same manifest in summary-only mode for ablation:
+
+```bash
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --temperature 0.0 --evaluation-context summary_only --pretty
 ```
 
 The runner saves:
@@ -89,6 +95,14 @@ The runner saves:
 - `summary.csv`
 - `report.md`
 - `run_meta.json`
+
+Each raw JSON output also preserves:
+
+- `pre_adjudication_scorecards`
+- `initial_disagreement_map`
+- `disputed_dimensions`
+
+This makes it easier to analyze how much the final result changed after adjudication.
 
 ## Practical Note
 

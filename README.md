@@ -13,6 +13,8 @@
 
 📖 **[Full API documentation](https://denoslab.github.io/LENS/)**
 
+Phase 2 experiment reproduction guide: `docs/phase2_experiment_reproduction.md`.
+
 LENS is a role-aware multi-agent grading pipeline for evaluating AI-generated clinical summaries in Emergency Department workflows. The same summary is reviewed from three clinical perspectives:
 
 - `Physician`
@@ -129,6 +131,12 @@ Output JSON:
 lens --summary "Your summary here" --format json --pretty
 ```
 
+Set a fully deterministic benchmark-style temperature:
+
+```bash
+lens --summary "Your summary here" --temperature 0.0
+```
+
 Include raw summary text in JSON output only when you explicitly want it:
 
 ```bash
@@ -170,6 +178,9 @@ Use `--include-summary` only when you explicitly want raw summary text in the sa
 
 The main JSON output includes:
 
+- `pre_adjudication_scorecards`
+- `initial_disagreement_map`
+- `disputed_dimensions`
 - `per_role_scorecards`
 - `disagreement_map`
 - `adjudication_ran`
@@ -220,10 +231,16 @@ Phase 2 includes an external source-grounded benchmark runner:
 - manifest: `data/phase2/benchmarks/source_grounded_demo/manifest.json`
 - runner: `scripts/run_source_grounded_benchmark.py`
 
-Example:
+Example source-grounded run:
 
 ```bash
-python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --pretty
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --temperature 0.0 --pretty
+```
+
+Example summary-only ablation on the same manifest:
+
+```bash
+python scripts/run_source_grounded_benchmark.py --model gpt-4o-mini --temperature 0.0 --evaluation-context summary_only --pretty
 ```
 
 Outputs include:
@@ -237,7 +254,8 @@ The benchmark report records:
 
 - timestamp
 - git SHA when available
-- model name
+- evaluation context (`source_grounded` or `summary_only`)
+- model name and temperature
 - rubric / roles / manifest hashes
 - attempted / completed / skipped / failed counts
 
