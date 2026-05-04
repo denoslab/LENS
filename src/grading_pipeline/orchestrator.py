@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 import inspect
 from statistics import mean
@@ -83,6 +84,12 @@ def calibrate_weights(
         for dim in DIMENSION_IDS
     }
     return _normalize_weights(combined)
+
+
+
+def _retry_delay_seconds(attempt: int) -> float:
+    """Deterministic exponential backoff for retryable LLM failures."""
+    return min(0.5 * (2 ** max(0, attempt - 1)), 4.0)
 
 
 def _to_role_name(role: RoleProfile) -> str:
@@ -161,6 +168,24 @@ def _validate_scorecard(
     elif overall < 1 or overall > 5:
         errors.append(f"overall must be within [1, 5], got {overall}")
 
+    evidence = scorecard.get("evidence")
+    if evidence is not None:
+        if not isinstance(evidence, dict):
+            errors.append("evidence must be an object when present")
+        else:
+            for dim in DIMENSION_IDS:
+                if dim not in evidence:
+                    errors.append(f"missing evidence for dimension '{dim}'")
+                    continue
+                value = evidence[dim]
+                if not isinstance(value, list):
+                    errors.append(f"evidence for '{dim}' must be a list")
+                    continue
+                for item in value:
+                    if not isinstance(item, str) or not item.strip():
+                        errors.append(f"evidence for '{dim}' must contain non-empty strings")
+                        break
+
     signals = scorecard.get("source_grounded_signals")
     if require_source_grounded_signals and signals is None:
         errors.append("source_grounded_signals must exist for source-grounded runs")
@@ -225,6 +250,15 @@ def _default_adjudicator(
         dim: {"type": "integer", "minimum": 1, "maximum": 5} for dim in disputed_dims
     }
     rationale_props = {dim: {"type": "string"} for dim in disputed_dims}
+    evidence_props = {
+        dim: {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {"type": "string", "minLength": 1},
+        }
+        for dim in disputed_dims
+    }
 
     source_signal_schema = {
         "type": "object",
@@ -255,7 +289,7 @@ def _default_adjudicator(
         },
     }
 
-    role_update_required = ["scores", "rationales"]
+    role_update_required = ["scores", "rationales", "evidence"]
     role_update_properties = {
         "scores": {
             "type": "object",
@@ -268,6 +302,12 @@ def _default_adjudicator(
             "additionalProperties": False,
             "required": disputed_dims,
             "properties": rationale_props,
+        },
+        "evidence": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": disputed_dims,
+            "properties": evidence_props,
         },
     }
     if source_text is not None:
@@ -379,8 +419,14 @@ def _apply_adjudication_updates(
             continue
 
         role_update = updates[role_id]
+        if "evidence" not in role_update and "evidence" in scorecards_by_role_id[role_id]:
+            raise OpenAIClientError(
+                f"Adjudication update for role '{role_id}' is missing evidence for disputed dimensions.",
+                retryable=False,
+            )
         score_updates = role_update.get("scores", {})
         rationale_updates = role_update.get("rationales", {})
+        evidence_updates = role_update.get("evidence", {})
 
         for dim in disputed_dims:
             if dim in score_updates:
@@ -389,6 +435,10 @@ def _apply_adjudication_updates(
                 scorecards_by_role_id[role_id]["rationales"][dim] = str(
                     rationale_updates[dim]
                 )
+            if dim in evidence_updates and "evidence" in scorecards_by_role_id[role_id]:
+                scorecards_by_role_id[role_id]["evidence"][dim] = [
+                    str(item).strip() for item in evidence_updates[dim] if str(item).strip()
+                ]
 
         if "source_grounded_signals" in role_update:
             scorecards_by_role_id[role_id]["source_grounded_signals"] = (
@@ -503,6 +553,52 @@ def _aggregate_source_grounded_signals(
     }
 
 
+def _canonical_json_sha256(payload: Any) -> str:
+    rendered = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",",":"))
+    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def _rubric_provenance(rubric: Rubric) -> Dict[str, Any]:
+    payload = {
+        "rubric_id": rubric.rubric_id,
+        "dimensions": [
+            {
+                "id": dim.id,
+                "name": dim.name,
+                "definition": dim.definition,
+                "evaluation_focus": dim.evaluation_focus,
+            }
+            for dim in rubric.dimensions
+        ],
+    }
+    return {
+        "rubric_id": rubric.rubric_id,
+        "rubric_sha256": _canonical_json_sha256(payload),
+    }
+
+
+def _roles_provenance(roles_by_id: Dict[str, RoleProfile]) -> Dict[str, Any]:
+    role_payloads = []
+    prompt_profile_sha256_by_role: Dict[str, str] = {}
+    for role_id in CANONICAL_ROLE_IDS:
+        role = roles_by_id[role_id]
+        prompt_profile_sha256_by_role[role_id] = _canonical_json_sha256(role.prompt_profile)
+        role_payloads.append(
+            {
+                "id": role.id,
+                "name": role.name,
+                "persona": role.persona,
+                "w_prior": role.w_prior,
+                "prompt_profile": role.prompt_profile,
+            }
+        )
+    return {
+        "role_ids": CANONICAL_ROLE_IDS,
+        "roles_sha256": _canonical_json_sha256(role_payloads),
+        "prompt_profile_sha256_by_role": prompt_profile_sha256_by_role,
+    }
+
+
 async def run_pipeline(
     summary: str,
     mode: str,
@@ -598,11 +694,16 @@ async def run_pipeline(
             try:
                 return await asyncio.to_thread(score_once, checked_summary, role, rubric)
             except OpenAIClientError as exc:
+                if not getattr(exc, "retryable", False):
+                    raise RuntimeError(
+                        f"Role '{role.id}' scoring failed without retry because the error is non-retryable: {exc}"
+                    ) from exc
                 attempt += 1
                 if attempt > max_retries:
                     raise RuntimeError(
                         f"Role '{role.id}' LLM scoring failed after {attempt} attempts: {exc}"
                     ) from exc
+                await asyncio.sleep(_retry_delay_seconds(attempt))
             except Exception as exc:
                 raise RuntimeError(f"Role '{role.id}' scoring failed: {exc}") from exc
 
@@ -728,6 +829,8 @@ async def run_pipeline(
     }
     if source_grounded_summary is not None:
         result["source_grounded_summary"] = source_grounded_summary
+    rubric_meta = _rubric_provenance(rubric)
+    roles_meta = _roles_provenance(roles_by_id)
     result["meta"] = {
         "version": "orchestrator_v1",
         "mode": mode,
@@ -736,6 +839,8 @@ async def run_pipeline(
         "max_retries": max_retries,
         "scoring_model": model,
         "adjudicator_model": effective_adjudicator_model if adjudication_ran else None,
+        "temperature": temperature if mode == "llm" else None,
+        "max_source_chars": max_source_chars,
         "evaluation_context": "source_grounded" if checked_source is not None else "summary_only",
         "initial_disputed_dimensions_count": len(disputed_dims),
         "source_text_provided": checked_source is not None,
@@ -743,5 +848,7 @@ async def run_pipeline(
         "source_original_chars": source_prep.original_chars if source_prep is not None else None,
         "source_used_chars": source_prep.kept_chars if source_prep is not None else None,
         "source_max_chars": source_prep.max_chars if source_prep is not None else None,
+        **rubric_meta,
+        **roles_meta,
     }
     return result

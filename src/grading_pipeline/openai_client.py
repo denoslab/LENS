@@ -30,6 +30,10 @@ DOTENV_PATH = PROJECT_ROOT / ".env"
 class OpenAIClientError(RuntimeError):
     """Raised for any OpenAI API communication or response-parsing failure."""
 
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+
 
 
 def _strip_inline_comment(value: str) -> str:
@@ -179,25 +183,33 @@ def create_response(
     except urllib.error.HTTPError as exc:
         err_body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         raise OpenAIClientError(
-            f"OpenAI API error {exc.code}: {_preview_text(err_body)}"
+            f"OpenAI API error {exc.code}: {_preview_text(err_body)}",
+            retryable=exc.code == 429 or 500 <= exc.code < 600,
         ) from exc
     except (TimeoutError, socket.timeout) as exc:
         raise OpenAIClientError(
-            f"OpenAI API request timed out after {timeout_seconds:.1f}s."
+            f"OpenAI API request timed out after {timeout_seconds:.1f}s.",
+            retryable=True,
         ) from exc
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
         if isinstance(reason, socket.timeout):
             raise OpenAIClientError(
-                f"OpenAI API request timed out after {timeout_seconds:.1f}s."
+                f"OpenAI API request timed out after {timeout_seconds:.1f}s.",
+                retryable=True,
             ) from exc
-        raise OpenAIClientError(f"OpenAI API request failed: {reason}") from exc
+        retryable = isinstance(reason, OSError)
+        raise OpenAIClientError(
+            f"OpenAI API request failed: {reason}",
+            retryable=retryable,
+        ) from exc
 
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
         raise OpenAIClientError(
-            f"OpenAI API returned invalid JSON: {_preview_text(raw)}"
+            f"OpenAI API returned invalid JSON: {_preview_text(raw)}",
+            retryable=True,
         ) from exc
 
 
@@ -223,11 +235,15 @@ def extract_json_output(response: Dict[str, Any]) -> Dict[str, Any]:
         text = "".join(text_parts).strip()
 
     if not text:
-        raise OpenAIClientError("No text output found in OpenAI response.")
+        raise OpenAIClientError(
+            "No text output found in OpenAI response.",
+            retryable=True,
+        )
 
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise OpenAIClientError(
-            f"Failed to parse JSON output: {_preview_text(text)}"
+            f"Failed to parse JSON output: {_preview_text(text)}",
+            retryable=True,
         ) from exc

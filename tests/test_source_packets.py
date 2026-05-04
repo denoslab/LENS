@@ -282,3 +282,39 @@ def test_source_packet_runtime_validator_matches_schema_requirements() -> None:
     assert schema["properties"]["encounter_context"]["additionalProperties"] is False
     assert schema["properties"]["medications"]["items"]["additionalProperties"] is False
     assert schema["properties"]["supporting_source_excerpts"]["items"]["additionalProperties"] is False
+
+
+def test_validate_source_packet_rejects_blank_required_strings() -> None:
+    packet = _valid_packet(
+        encounter_context={
+            "setting": "   ",
+            "encounter_reason": "Test encounter",
+            "time_window": "last 24 hours",
+        }
+    )
+
+    errors = validate_source_packet(packet)
+
+    assert any("encounter_context.setting must be a non-empty string" in msg for msg in errors)
+
+
+def test_validate_source_packet_rejects_empty_key_sections() -> None:
+    packet = _valid_packet(
+        active_problems=[],
+        supporting_source_excerpts=[],
+    )
+
+    errors = validate_source_packet(packet)
+
+    assert any("active_problems must contain at least one item" in msg for msg in errors)
+    assert any("supporting_source_excerpts must contain at least one item" in msg for msg in errors)
+
+
+def test_validate_source_packet_rejects_blank_excerpt_text() -> None:
+    packet = _valid_packet(
+        supporting_source_excerpts=[{"label": "Triage", "text": "   "}]
+    )
+
+    errors = validate_source_packet(packet)
+
+    assert any("supporting_source_excerpts[0].text must be a non-empty string" in msg for msg in errors)

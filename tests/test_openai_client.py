@@ -33,6 +33,7 @@ def test_extract_json_output_redacts_long_invalid_text() -> None:
     assert "Failed to parse JSON output:" in message
     assert "chars=600" in message
     assert len(message) < 450
+    assert exc.value.retryable is True
 
 
 def test_create_response_wraps_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -42,10 +43,11 @@ def test_create_response_wraps_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *args, **kwargs: (_ for _ in ()).throw(URLError(socket.timeout("timed out"))),
     )
 
-    with pytest.raises(OpenAIClientError, match="timed out"):
+    with pytest.raises(OpenAIClientError, match="timed out") as exc:
         create_response(
             model="test-model",
             instructions="return json",
             input_text="hello",
             json_schema={"type": "object", "properties": {}},
         )
+    assert exc.value.retryable is True

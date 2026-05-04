@@ -136,57 +136,73 @@
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "relevant_chronic_problem_coverage": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "organized_by_condition": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "timeline_evolution": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "recent_changes_highlighted": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "focused_not_cluttered": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "usefulness_for_decision_making": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "clarity_readability_formatting": {
           "type": "array",
           "maxItems": 3,
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         }
       }
     },

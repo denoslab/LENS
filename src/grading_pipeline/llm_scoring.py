@@ -116,8 +116,9 @@ def _build_score_schema(rubric: Rubric, source_grounded: bool) -> Dict[str, Any]
         rationale_props[dim.id] = {"type": "string", "minLength": 1}
         evidence_props[dim.id] = {
             "type": "array",
+            "minItems": 1,
             "maxItems": 3,
-            "items": {"type": "string"},
+            "items": {"type": "string", "minLength": 1},
         }
 
     required_dims = [dim.id for dim in rubric.dimensions]
@@ -292,7 +293,10 @@ def _normalize_evidence(evidence: Dict[str, Any], dimension_ids: List[str]) -> D
             raise OpenAIClientError(f"Missing evidence list for dimension: {dim_id}")
         if not isinstance(value, list):
             raise OpenAIClientError(f"Evidence for {dim_id} must be a list.")
-        normalized[dim_id] = [str(item) for item in value]
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        if not cleaned:
+            raise OpenAIClientError(f"Evidence for {dim_id} must contain at least one non-empty item.")
+        normalized[dim_id] = cleaned
     return normalized
 
 

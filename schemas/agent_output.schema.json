@@ -27,14 +27,46 @@
         "clarity_readability_formatting"
       ],
       "properties": {
-        "factual_accuracy": {"type": "integer", "minimum": 1, "maximum": 5},
-        "relevant_chronic_problem_coverage": {"type": "integer", "minimum": 1, "maximum": 5},
-        "organized_by_condition": {"type": "integer", "minimum": 1, "maximum": 5},
-        "timeline_evolution": {"type": "integer", "minimum": 1, "maximum": 5},
-        "recent_changes_highlighted": {"type": "integer", "minimum": 1, "maximum": 5},
-        "focused_not_cluttered": {"type": "integer", "minimum": 1, "maximum": 5},
-        "usefulness_for_decision_making": {"type": "integer", "minimum": 1, "maximum": 5},
-        "clarity_readability_formatting": {"type": "integer", "minimum": 1, "maximum": 5}
+        "factual_accuracy": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "organized_by_condition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "timeline_evolution": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "recent_changes_highlighted": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "focused_not_cluttered": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "usefulness_for_decision_making": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "clarity_readability_formatting": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
       }
     },
     "rationales": {
@@ -51,14 +83,38 @@
         "clarity_readability_formatting"
       ],
       "properties": {
-        "factual_accuracy": {"type": "string", "minLength": 1},
-        "relevant_chronic_problem_coverage": {"type": "string", "minLength": 1},
-        "organized_by_condition": {"type": "string", "minLength": 1},
-        "timeline_evolution": {"type": "string", "minLength": 1},
-        "recent_changes_highlighted": {"type": "string", "minLength": 1},
-        "focused_not_cluttered": {"type": "string", "minLength": 1},
-        "usefulness_for_decision_making": {"type": "string", "minLength": 1},
-        "clarity_readability_formatting": {"type": "string", "minLength": 1}
+        "factual_accuracy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "organized_by_condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeline_evolution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recent_changes_highlighted": {
+          "type": "string",
+          "minLength": 1
+        },
+        "focused_not_cluttered": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usefulness_for_decision_making": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clarity_readability_formatting": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "evidence": {
@@ -75,14 +131,78 @@
         "clarity_readability_formatting"
       ],
       "properties": {
-        "factual_accuracy": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "relevant_chronic_problem_coverage": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "organized_by_condition": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "timeline_evolution": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "recent_changes_highlighted": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "focused_not_cluttered": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "usefulness_for_decision_making": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-        "clarity_readability_formatting": {"type": "array", "maxItems": 3, "items": {"type": "string"}}
+        "factual_accuracy": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "relevant_chronic_problem_coverage": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "organized_by_condition": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "timeline_evolution": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "recent_changes_highlighted": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "focused_not_cluttered": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "usefulness_for_decision_making": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "clarity_readability_formatting": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
       }
     }
   }

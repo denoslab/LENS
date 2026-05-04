@@ -186,17 +186,31 @@ def _check_no_extra_keys(value: Mapping[str, Any], path: str, allowed_keys: list
 def _check_string(value: Any, path: str, errors: list[str]) -> None:
     if not isinstance(value, str):
         errors.append(f"{path} must be a string, got {type(value).__name__}")
+        return
+    if not value.strip():
+        errors.append(f"{path} must be a non-empty string")
 
 
-def _check_string_array(value: Any, path: str, errors: list[str]) -> None:
+def _check_string_array(
+    value: Any,
+    path: str,
+    errors: list[str],
+    *,
+    require_non_empty: bool = True,
+) -> None:
     if not isinstance(value, list):
         errors.append(f"{path} must be an array, got {type(value).__name__}")
         return
+    if require_non_empty and not value:
+        errors.append(f"{path} must contain at least one item")
     for idx, item in enumerate(value):
         if not isinstance(item, str):
             errors.append(
                 f"{path}[{idx}] must be a string, got {type(item).__name__}"
             )
+            continue
+        if not item.strip():
+            errors.append(f"{path}[{idx}] must be a non-empty string")
 
 
 def _check_object_array(
@@ -204,10 +218,14 @@ def _check_object_array(
     path: str,
     required_fields: list[str],
     errors: list[str],
+    *,
+    require_non_empty: bool = True,
 ) -> None:
     if not isinstance(value, list):
         errors.append(f"{path} must be an array, got {type(value).__name__}")
         return
+    if require_non_empty and not value:
+        errors.append(f"{path} must contain at least one item")
     for idx, item in enumerate(value):
         item_path = f"{path}[{idx}]"
         if not isinstance(item, dict):
@@ -232,11 +250,15 @@ def _check_object_array(
                     f"{item_path}.{field} must be a string, got "
                     f"{type(item[field]).__name__}"
                 )
+            elif not item[field].strip():
+                errors.append(f"{item_path}.{field} must be a non-empty string")
         for field in optional_fields:
             if field in item and not isinstance(item[field], str):
                 errors.append(
                     f"{item_path}.{field} must be a string, got {type(item[field]).__name__}"
                 )
+            elif field in item and not item[field].strip():
+                errors.append(f"{item_path}.{field} must be a non-empty string")
 
 
 def validate_source_packet(data: Any) -> list[str]:
@@ -287,16 +309,10 @@ def validate_source_packet(data: Any) -> list[str]:
                     errors.append(
                         f"encounter_context missing required field '{field}'"
                     )
-                elif not isinstance(ctx[field], str):
-                    errors.append(
-                        f"encounter_context.{field} must be a string, got "
-                        f"{type(ctx[field]).__name__}"
-                    )
-            if "time_window" in ctx and not isinstance(ctx["time_window"], str):
-                errors.append(
-                    f"encounter_context.time_window must be a string, got "
-                    f"{type(ctx['time_window']).__name__}"
-                )
+                else:
+                    _check_string(ctx[field], f"encounter_context.{field}", errors)
+            if "time_window" in ctx:
+                _check_string(ctx["time_window"], "encounter_context.time_window", errors)
 
     for field in _STRING_ARRAY_FIELDS:
         if field in data:

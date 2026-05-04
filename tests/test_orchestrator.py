@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from grading_pipeline.config import load_roles, load_rubric
+from grading_pipeline.openai_client import OpenAIClientError
 from grading_pipeline.orchestrator import (
     CANONICAL_ROLE_IDS,
     DIMENSION_IDS,
@@ -34,6 +35,20 @@ def _make_agent(role_id: str, scores: Dict[str, int], overall: float = 3.0) -> A
         role_id=role_id,
         scores=scores,
         rationales=rationales,
+        overall_score=overall,
+    )
+
+
+def _make_agent_with_evidence(
+    role_id: str, scores: Dict[str, int], overall: float = 3.0
+) -> AgentScore:
+    rationales = {dim: "ok" for dim in DIMENSION_IDS}
+    evidence = {dim: [f"evidence for {dim}"] for dim in DIMENSION_IDS}
+    return AgentScore(
+        role_id=role_id,
+        scores=scores,
+        rationales=rationales,
+        evidence=evidence,
         overall_score=overall,
     )
 
@@ -145,10 +160,10 @@ def test_conditional_adjudication_in_llm_mode() -> None:
 
     def gap_scorer(summary, role, rubric):
         if role.id == "physician":
-            return _make_agent(role.id, disputed_physician, overall=3.0)
+            return _make_agent_with_evidence(role.id, disputed_physician, overall=3.0)
         if role.id == "triage_nurse":
-            return _make_agent(role.id, disputed_triage, overall=3.0)
-        return _make_agent(role.id, disputed_bedside, overall=3.0)
+            return _make_agent_with_evidence(role.id, disputed_triage, overall=3.0)
+        return _make_agent_with_evidence(role.id, disputed_bedside, overall=3.0)
 
     def adjudicator_once(**kwargs):
         adjudicator_calls["count"] += 1
@@ -158,6 +173,7 @@ def test_conditional_adjudication_in_llm_mode() -> None:
             updates[role_id] = {
                 "scores": {dim: 4 for dim in disputed_dims},
                 "rationales": {dim: "adjudicated" for dim in disputed_dims},
+                "evidence": {dim: [f"updated evidence for {dim}"] for dim in disputed_dims},
             }
         return updates
 
@@ -231,15 +247,23 @@ def test_post_adjudication_repair_preserves_non_disputed_dimensions() -> None:
                 return _make_agent(role.id, physician_initial, overall=3.0)
             return _make_agent(role.id, physician_repair, overall=3.0)
         if role.id == "triage_nurse":
-            return _make_agent(role.id, triage_initial, overall=3.0)
-        return _make_agent(role.id, bedside_initial, overall=3.0)
+            return _make_agent_with_evidence(role.id, triage_initial, overall=3.0)
+        return _make_agent_with_evidence(role.id, bedside_initial, overall=3.0)
 
     def invalid_adjudicator(**kwargs):
         disputed_dims = kwargs["disputed_dims"]
-        updates = {role_id: {"scores": {}, "rationales": {}} for role_id in CANONICAL_ROLE_IDS}
+        updates = {
+            role_id: {
+                "scores": {},
+                "rationales": {},
+                "evidence": {},
+            }
+            for role_id in CANONICAL_ROLE_IDS
+        }
         updates["physician"] = {
             "scores": {dim: 6 for dim in disputed_dims},
             "rationales": {dim: "invalid" for dim in disputed_dims},
+            "evidence": {dim: [f"invalid evidence for {dim}"] for dim in disputed_dims},
         }
         return updates
 
@@ -279,7 +303,7 @@ def test_aggregation_recomputes_role_overall_from_w_prior() -> None:
     }
 
     def role_scorer(summary, role, rubric):
-        return _make_agent(role.id, scores, overall=2.0)
+        return _make_agent_with_evidence(role.id, scores, overall=2.0)
 
     result = asyncio.run(
         run_pipeline(
@@ -379,10 +403,10 @@ def test_adjudication_uses_configured_model_not_hardcoded_default() -> None:
 
     def gap_scorer(summary, role, rubric):
         if role.id == "physician":
-            return _make_agent(role.id, disputed_physician, overall=3.0)
+            return _make_agent_with_evidence(role.id, disputed_physician, overall=3.0)
         if role.id == "triage_nurse":
-            return _make_agent(role.id, disputed_triage, overall=3.0)
-        return _make_agent(role.id, disputed_bedside, overall=3.0)
+            return _make_agent_with_evidence(role.id, disputed_triage, overall=3.0)
+        return _make_agent_with_evidence(role.id, disputed_bedside, overall=3.0)
 
     def adjudicator_spy(**kwargs):
         seen.update(kwargs)
@@ -391,6 +415,7 @@ def test_adjudication_uses_configured_model_not_hardcoded_default() -> None:
             role_id: {
                 "scores": {dim: 4 for dim in disputed_dims},
                 "rationales": {dim: "ok" for dim in disputed_dims},
+                "evidence": {dim: [f"updated evidence for {dim}"] for dim in disputed_dims},
             }
             for role_id in CANONICAL_ROLE_IDS
         }
@@ -667,6 +692,7 @@ def test_default_adjudicator_uses_prepared_source_text(monkeypatch: pytest.Monke
                 role_id: {
                     "scores": {"factual_accuracy": 3},
                     "rationales": {"factual_accuracy": "ok"},
+                    "evidence": {"factual_accuracy": ["ok evidence"]},
                     "source_grounded_signals": {
                         "wrong_patient_suspected": False,
                         "unsupported_claims": [],
@@ -716,3 +742,154 @@ def test_run_pipeline_reports_role_failure_context() -> None:
                 gap_threshold=10.0,
             )
         )
+
+
+def test_adjudication_updates_disputed_evidence() -> None:
+    rubric, roles = _load_config()
+
+    physician_scores = {dim: 3 for dim in DIMENSION_IDS}
+    triage_scores = {dim: 3 for dim in DIMENSION_IDS}
+    bedside_scores = {dim: 3 for dim in DIMENSION_IDS}
+    physician_scores["factual_accuracy"] = 5
+    triage_scores["factual_accuracy"] = 3
+    bedside_scores["factual_accuracy"] = 2
+
+    def gap_scorer(summary, role, rubric):
+        if role.id == "physician":
+            return _make_agent_with_evidence(role.id, physician_scores, overall=3.0)
+        if role.id == "triage_nurse":
+            return _make_agent_with_evidence(role.id, triage_scores, overall=3.0)
+        return _make_agent_with_evidence(role.id, bedside_scores, overall=3.0)
+
+    def adjudicator_spy(**kwargs):
+        disputed_dims = kwargs["disputed_dims"]
+        return {
+            role_id: {
+                "scores": {dim: 4 for dim in disputed_dims},
+                "rationales": {dim: "revised" for dim in disputed_dims},
+                "evidence": {dim: [f"fresh evidence for {dim}"] for dim in disputed_dims},
+            }
+            for role_id in CANONICAL_ROLE_IDS
+        }
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history and enough detail for adjudication testing.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=gap_scorer,
+            adjudicator=adjudicator_spy,
+            gap_threshold=0.5,
+            max_retries=2,
+        )
+    )
+
+    by_role = {card["role_id"]: card for card in result["per_role_scorecards"]}
+    assert by_role["physician"]["evidence"]["factual_accuracy"] == ["fresh evidence for factual_accuracy"]
+
+
+def test_run_pipeline_retries_only_retryable_llm_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    rubric, roles = _load_config()
+    calls = {role_id: 0 for role_id in CANONICAL_ROLE_IDS}
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("grading_pipeline.orchestrator.asyncio.sleep", fake_sleep)
+
+    def role_scorer(summary, role, rubric):
+        calls[role.id] += 1
+        if role.id == "physician" and calls[role.id] == 1:
+            raise OpenAIClientError("rate limited", retryable=True)
+        return _make_agent(role.id, {dim: 3 for dim in DIMENSION_IDS}, overall=3.0)
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, medication changes, and enough detail for ED handoff scoring.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+            max_retries=2,
+        )
+    )
+
+    assert result["overall_across_roles"] >= 1.0
+    assert calls["physician"] == 2
+    assert sleeps == [0.5]
+
+
+def test_run_pipeline_does_not_retry_non_retryable_llm_errors() -> None:
+    rubric, roles = _load_config()
+    calls = {role_id: 0 for role_id in CANONICAL_ROLE_IDS}
+
+    def role_scorer(summary, role, rubric):
+        calls[role.id] += 1
+        if role.id == "physician":
+            raise OpenAIClientError("deterministic schema failure", retryable=False)
+        return _make_agent(role.id, {dim: 3 for dim in DIMENSION_IDS}, overall=3.0)
+
+    with pytest.raises(RuntimeError, match="non-retryable"):
+        asyncio.run(
+            run_pipeline(
+                summary="Patient has chronic disease history, medication changes, and enough detail for ED handoff scoring.",
+                mode="llm",
+                output_format="json",
+                rubric=rubric,
+                roles=roles,
+                role_scorer=role_scorer,
+                gap_threshold=10.0,
+                max_retries=2,
+            )
+        )
+
+    assert calls["physician"] == 1
+
+
+def test_source_grounded_meta_includes_reproducibility_fields() -> None:
+    rubric, roles = _load_config()
+    fixed_scores = {dim: 3 for dim in DIMENSION_IDS}
+    valid_signals = {
+        "wrong_patient_suspected": False,
+        "unsupported_claims": [],
+        "contradicted_claims": [],
+        "omitted_safety_facts": [],
+    }
+
+    def role_scorer(summary, role, rubric, source_text=None):
+        return AgentScore(
+            role_id=role.id,
+            scores=fixed_scores,
+            rationales={dim: "ok" for dim in DIMENSION_IDS},
+            evidence={dim: [f"evidence for {dim}"] for dim in DIMENSION_IDS},
+            overall_score=3.0,
+            source_grounded_signals=valid_signals,
+        )
+
+    result = asyncio.run(
+        run_pipeline(
+            summary="Patient has chronic disease history, recent worsening, and medication changes relevant to handoff.",
+            source_text="Source packet shows insulin timing, oxygen dependence, and recent deterioration over 24 hours.",
+            mode="llm",
+            output_format="json",
+            rubric=rubric,
+            roles=roles,
+            role_scorer=role_scorer,
+            gap_threshold=10.0,
+            temperature=0.0,
+            max_source_chars=1234,
+        )
+    )
+
+    meta = result["meta"]
+    assert meta["temperature"] == 0.0
+    assert meta["max_source_chars"] == 1234
+    assert meta["rubric_id"] == rubric.rubric_id
+    assert isinstance(meta["rubric_sha256"], str) and len(meta["rubric_sha256"]) == 64
+    assert isinstance(meta["roles_sha256"], str) and len(meta["roles_sha256"]) == 64
+    assert set(meta["prompt_profile_sha256_by_role"]) == set(CANONICAL_ROLE_IDS)
